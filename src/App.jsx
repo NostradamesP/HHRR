@@ -1,8 +1,8 @@
-import React, { Component, useMemo, useState, useEffect, useCallback, useRef } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
+import React, { Component, useMemo, useState, useEffect, useRef } from "react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { collection, onSnapshot, query, orderBy, where, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
