@@ -2,7 +2,7 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from "react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { collection, onSnapshot, orderBy, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
@@ -89,8 +89,18 @@ function SortableCard({ task, onSelect, isAdmin, userMap }) {
           <span className="truncate">{task.assignedName}</span>
         </div>
       )}
+      {task.dueDate && (
+        <DueDateBadge dueDate={task.dueDate} />
+      )}
     </div>
   );
+}
+
+function DueDateBadge({ dueDate }) {
+  const days = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+  const color = days < 0 ? "text-red-500" : days <= 3 ? "text-amber-500" : "text-emerald-500";
+  const label = days < 0 ? `🔴 Vencida` : days === 0 ? `🔴 Hoy` : days === 1 ? `🟡 Mañana` : days <= 3 ? `🟡 ${days} días` : `🟢 ${days} días`;
+  return <div className={`mt-1 text-[11px] font-medium ${color}`}>{label}</div>;
 }
 
 function Modal({ open, onClose, children }) {
@@ -107,7 +117,7 @@ function Modal({ open, onClose, children }) {
 
 function TaskForm({ onSave, onClose, initial, users }) {
   const { isAdmin } = useAuth();
-  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio", description: "", assignedTo: "", assignedName: "" });
+  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio", description: "", assignedTo: "", assignedName: "", dueDate: "" });
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
@@ -119,6 +129,7 @@ function TaskForm({ onSave, onClose, initial, users }) {
         <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">💤 Baja</option></select>
         <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alto">🔥 Alto</option><option value="Medio">⚡ Medio</option><option value="Bajo">💤 Bajo</option></select>
       </div>
+      <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
       {isAdmin && users.length > 0 && (
         <select value={f.assignedTo} onChange={e => {
           const u = users.find(u => u.id === e.target.value);
@@ -136,7 +147,8 @@ function TaskForm({ onSave, onClose, initial, users }) {
   );
 }
 
-function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin }) {
+function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId }) {
+  const [logs, setLogs] = useState([]);
   const statusOrder = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
   const currentIdx = statusOrder.indexOf(task.status);
 
@@ -147,8 +159,43 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin }) {
         return targetIdx > currentIdx && s !== "Bloqueado";
       });
 
+  useEffect(() => {
+    if (!activeBoardId) return;
+    const q = query(
+      collection(db, "boards", activeBoardId, "logs"),
+      where("taskId", "==", task.id),
+      orderBy("createdAt", "desc"),
+      limit(30)
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [task.id, activeBoardId]);
+
+  function formatTimestamp(ts) {
+    if (!ts) return "";
+    const d = ts.toDate ? ts.toDate() : new Date(ts);
+    const now = new Date();
+    const diff = now - d;
+    if (diff < 60000) return "ahora";
+    if (diff < 3600000) return `${Math.floor(diff / 60000)}m`;
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)}h`;
+    return d.toLocaleDateString();
+  }
+
+  const actionLabels = {
+    created: "creó esta tarea",
+    updated: "editó esta tarea",
+    deleted: "eliminó esta tarea",
+    status_changed: "cambió el estado",
+    assigned: "asignó esta tarea",
+    archived: "archivó esta tarea",
+    restored: "restauró esta tarea",
+  };
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-h-[80vh] overflow-y-auto">
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2">
           <span className={`inline-block h-3 w-3 rounded-full ${priorityColor(task.priority)}`} />
@@ -164,6 +211,11 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin }) {
         <div><span className="text-xs font-medium text-slate-400">Fase</span><p className="text-sm font-semibold text-slate-700">{task.phase} - {phaseMap[task.phase]}</p></div>
         <div><span className="text-xs font-medium text-slate-400">Esfuerzo</span><p className="text-sm font-semibold text-slate-700">{effortLabels[task.effort]}</p></div>
         <div><span className="text-xs font-medium text-slate-400">Asignado a</span><p className="text-sm font-semibold text-slate-700">{task.assignedName || "—"}</p></div>
+        <div><span className="text-xs font-medium text-slate-400">Fecha límite</span><p className="text-sm font-semibold text-slate-700">{task.dueDate ? (() => {
+          const days = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+          const icon = days < 0 ? "🔴" : days <= 3 ? "🟡" : "🟢";
+          return `${icon} ${new Date(task.dueDate).toLocaleDateString()}`;
+        })() : "—"}</p></div>
       </div>
       {availableStatuses.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -173,9 +225,32 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin }) {
         </div>
       )}
       {isAdmin && (
-        <div className="flex gap-3 border-t border-slate-100 pt-4">
+        <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-4">
           <button onClick={() => { onEdit(task); onClose(); }} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">✎ Editar</button>
+          {task.archived ? (
+            <button onClick={() => { onArchive(task.id, false); onClose(); }} className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-100 transition-colors">📦 Restaurar</button>
+          ) : (
+            <button onClick={() => { onArchive(task.id, true); onClose(); }} className="rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-100 transition-colors">📦 Archivar</button>
+          )}
           <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">🗑️ Eliminar</button>
+        </div>
+      )}
+      {logs.length > 0 && (
+        <div className="border-t border-slate-100 pt-4">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Actividad</h3>
+          <div className="space-y-2">
+            {logs.map(l => (
+              <div key={l.id} className="flex items-start gap-2 text-xs">
+                <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" />
+                <div>
+                  <span className="font-medium text-slate-700">{l.userName}</span>{" "}
+                  <span className="text-slate-500">{actionLabels[l.action] || l.action}</span>
+                  {l.details && <span className="text-slate-400"> · {l.details}</span>}
+                  <span className="text-slate-300 ml-1">{formatTimestamp(l.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -328,6 +403,8 @@ export default function NoraHRKanban() {
   const [collapsed, setCollapsed] = useState({});
   const [showAdmin, setShowAdmin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
+  const [overdueOnly, setOverdueOnly] = useState(false);
   const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(boards);
@@ -340,7 +417,7 @@ export default function NoraHRKanban() {
 
   useEffect(() => {
     if (!user || !activeBoardId) return;
-    const q = collection(db, "boards", activeBoardId, "tasks");
+    const q = query(collection(db, "boards", activeBoardId, "tasks"), orderBy("order", "asc"));
     const unsub = onSnapshot(q, (snap) => {
       const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTasks(ts);
@@ -348,10 +425,13 @@ export default function NoraHRKanban() {
         seeded.current[activeBoardId] = true;
         const board = boardsRef.current.find(b => b.id === activeBoardId);
         if (board && board.name === "NoraHR Roadmap") {
-          initialTasks.forEach(async (t) => {
+          initialTasks.forEach(async (t, idx) => {
             const { id, ...data } = t;
             await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
               ...data,
+              order: Date.now() + idx,
+              dueDate: "",
+              archived: false,
               assignedTo: "",
               assignedName: "",
               createdBy: user.uid,
@@ -378,9 +458,12 @@ export default function NoraHRKanban() {
     migrated.current = true;
     getDocs(collection(db, "tasks")).then(async (snap) => {
       if (snap.empty) return;
-      const writes = snap.docs.map(d =>
+      const writes = snap.docs.map((d, idx) =>
         setDoc(doc(db, "boards", activeBoardId, "tasks", d.id), {
           ...d.data(),
+          order: d.data().order || Date.now() + idx,
+          dueDate: d.data().dueDate || "",
+          archived: d.data().archived || false,
           updatedAt: serverTimestamp(),
         })
       );
@@ -395,45 +478,93 @@ export default function NoraHRKanban() {
     return m;
   }, [users]);
 
-  const filtered = useMemo(() => filterTasks(tasks, searchQuery, mod, prio, phase), [tasks, searchQuery, mod, prio, phase]);
+  const displayedTasks = useMemo(() => {
+    let ts = tasks.filter(t => showArchived ? t.archived : !t.archived);
+    if (overdueOnly) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      ts = ts.filter(t => t.dueDate && new Date(t.dueDate) < today);
+    }
+    return filterTasks(ts, searchQuery, mod, prio, phase);
+  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly]);
+
+  const overdueCount = useMemo(() => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return tasks.filter(t => !t.archived && t.dueDate && new Date(t.dueDate) < today).length;
+  }, [tasks]);
 
   const columns = useMemo(() => {
     const byCol = {};
     statuses.forEach(s => byCol[s] = []);
-    filtered.forEach(t => { if (byCol[t.status]) byCol[t.status].push(t); });
+    displayedTasks.forEach(t => { if (byCol[t.status]) byCol[t.status].push(t); });
     return statuses.map(s => ({ status: s, items: byCol[s] }));
-  }, [filtered]);
+  }, [displayedTasks]);
 
   const done = tasks.filter(t => t.status === "Hecho").length;
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
   const effortDone = tasks.filter(t => t.status === "Hecho").reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
   const effortTotal = tasks.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
 
+  async function createLog(taskId, taskTitle, action, details) {
+    if (!user || !activeBoardId) return;
+    try {
+      await addDoc(collection(db, "boards", activeBoardId, "logs"), {
+        action,
+        taskId,
+        taskTitle,
+        details: details || "",
+        userId: user.uid,
+        userName: userData?.name || user.email,
+        createdAt: serverTimestamp(),
+      });
+    } catch (e) {
+      console.error("Error creating log:", e);
+    }
+  }
+
+  async function archiveTask(id, archived) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
+    try {
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { archived, updatedAt: serverTimestamp() });
+      createLog(id, task.title, archived ? "archived" : "restored", "");
+    } catch (e) {
+      console.error("Error archiving task:", e);
+    }
+  }
+
   async function handleDragEnd(e) {
     const { active, over } = e;
     if (!over || !isAdmin) return;
 
     const taskId = String(active.id);
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
     const overStr = String(over.id);
     let newStatus = null;
+    let isReorder = false;
 
     if (overStr.startsWith("column-")) {
       newStatus = overStr.replace("column-", "");
     } else {
       const overTask = tasks.find(t => t.id === overStr);
-      if (overTask && taskId !== overStr) {
-        if (overTask.status !== tasks.find(t => t.id === taskId)?.status) {
+      if (overTask) {
+        if (overTask.status !== task.status) {
           newStatus = overTask.status;
+        } else if (taskId !== overStr) {
+          isReorder = true;
         }
       }
     }
 
-    if (newStatus) {
+    if (newStatus || isReorder) {
       try {
-        await updateDoc(doc(db, "boards", activeBoardId, "tasks", taskId), {
-          status: newStatus,
-          updatedAt: serverTimestamp(),
-        });
+        const updates = { updatedAt: serverTimestamp(), order: Date.now() };
+        if (newStatus) updates.status = newStatus;
+        await updateDoc(doc(db, "boards", activeBoardId, "tasks", taskId), updates);
+        if (newStatus) createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
         console.error("Error updating task status:", e);
       }
@@ -441,16 +572,21 @@ export default function NoraHRKanban() {
   }
 
   async function updateStatus(id, s) {
+    const task = tasks.find(t => t.id === id);
+    if (!task) return;
     try {
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { status: s, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { status: s, order: Date.now(), updatedAt: serverTimestamp() });
+      createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
     } catch (e) {
       console.error("Error updating status:", e);
     }
   }
 
   async function deleteTask(id) {
+    const task = tasks.find(t => t.id === id);
     try {
       await deleteDoc(doc(db, "boards", activeBoardId, "tasks", id));
+      if (task) createLog(id, task.title, "deleted", "");
     } catch (e) {
       console.error("Error deleting task:", e);
     }
@@ -458,7 +594,7 @@ export default function NoraHRKanban() {
 
   async function addTask(f) {
     try {
-      await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
+      const ref = await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
         title: f.title,
         module: f.module,
         phase: f.phase,
@@ -466,12 +602,16 @@ export default function NoraHRKanban() {
         effort: f.effort,
         description: f.description || "",
         status: "Pendiente",
+        order: Date.now(),
+        dueDate: f.dueDate || "",
+        archived: false,
         assignedTo: f.assignedTo || "",
         assignedName: f.assignedName || "",
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+      createLog(ref.id, f.title, "created", "");
       setShowAdd(false);
     } catch (e) {
       console.error("Error adding task:", e);
@@ -482,6 +622,7 @@ export default function NoraHRKanban() {
     try {
       const { id, ...data } = f;
       await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { ...data, updatedAt: serverTimestamp() });
+      createLog(id, f.title, "updated", "");
       setEditT(null);
     } catch (e) {
       console.error("Error editing task:", e);
@@ -537,6 +678,14 @@ export default function NoraHRKanban() {
               </span>
               {isAdmin && (
                 <button onClick={() => setShowAdmin(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙️ Admin</button>
+              )}
+              <button onClick={() => setShowArchived(!showArchived)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${showArchived ? "bg-amber-100 text-amber-700 border-amber-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                {showArchived ? "📦 Ver activas" : "📦 Archivadas"}
+              </button>
+              {overdueCount > 0 && !showArchived && (
+                <button onClick={() => setOverdueOnly(!overdueOnly)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${overdueOnly ? "bg-red-100 text-red-700 border-red-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                  🔴 {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
+                </button>
               )}
               <button onClick={exportCSV} className="hidden rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors md:block">Export</button>
               {isAdmin && (
@@ -630,7 +779,7 @@ export default function NoraHRKanban() {
       </Modal>
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)}>
-        {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} isAdmin={isAdmin} />}
+        {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={isAdmin} activeBoardId={activeBoardId} />}
       </Modal>
 
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
