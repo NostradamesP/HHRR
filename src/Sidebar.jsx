@@ -38,7 +38,7 @@ export default function Sidebar({ open, onClose }) {
         className={`fixed inset-0 z-40 bg-black/20 backdrop-blur-sm transition-opacity ${open ? "opacity-100" : "opacity-0 pointer-events-none"}`}
         onClick={onClose}
       />
-      <aside className={`fixed right-0 top-0 z-50 h-full w-72 bg-white border-l border-slate-200 shadow-xl transition-all duration-300 flex flex-col ${open ? "translate-x-0" : "translate-x-full"}`}>
+      <aside className={`fixed right-0 top-0 z-50 h-full w-full max-w-xs sm:max-w-sm md:w-80 bg-white border-l border-slate-200 shadow-xl transition-all duration-300 flex flex-col ${open ? "translate-x-0" : "translate-x-full"}`}>
         <div className="flex items-center justify-between p-4 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-2">
             <span className="text-sm">📋</span>

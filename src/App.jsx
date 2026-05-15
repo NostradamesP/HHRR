@@ -69,7 +69,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap }) {
   return (
     <div ref={setNodeRef} style={s} {...(isAdmin ? { ...attributes, ...listeners } : {})}
       onClick={() => onSelect(task)}
-      className={`group rounded-xl border bg-white p-3 shadow-sm transition-all ${isAdmin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+      className={`group rounded-xl border bg-white p-2.5 md:p-3 shadow-sm transition-all ${isAdmin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${priorityColor(task.priority)}`} />
@@ -108,7 +108,7 @@ function Modal({ open, onClose, children }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl border bg-white p-4 md:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -123,7 +123,7 @@ function TaskForm({ onSave, onClose, initial, users }) {
       <h2 className="text-lg font-bold text-slate-900">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
       <input placeholder="Título" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" autoFocus />
       <textarea placeholder="Descripción (opcional)" value={f.description || ""} onChange={e => setF({ ...f, description: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" rows={2} />
-      <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <select value={f.module} onChange={e => setF({ ...f, module: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">{modules.map(m => <option key={m} value={m}>{m}</option>)}</select>
         <select value={f.phase} onChange={e => setF({ ...f, phase: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">{Object.entries(phaseMap).map(([k, v]) => <option key={k} value={k}>{k} - {v}</option>)}</select>
         <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">💤 Baja</option></select>
@@ -404,6 +404,8 @@ export default function NoraHRKanban() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const [overdueOnly, setOverdueOnly] = useState(false);
+  const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(boards);
@@ -694,45 +696,76 @@ export default function NoraHRKanban() {
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setSidebarOpen(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">📋 Boards</button>
-              <span className="hidden text-[11px] text-slate-400 md:block">
-                👤 {userData?.name || user.email}
-                <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
-              </span>
-              {isAdmin && (
-                <button onClick={() => setShowAdmin(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙️ Admin</button>
-              )}
-              <button onClick={() => setShowArchived(!showArchived)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${showArchived ? "bg-amber-100 text-amber-700 border-amber-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
-                {showArchived ? "📦 Ver activas" : "📦 Archivadas"}
-              </button>
-              {overdueCount > 0 && !showArchived && (
-                <button onClick={() => setOverdueOnly(!overdueOnly)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${overdueOnly ? "bg-red-100 text-red-700 border-red-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
-                  🔴 {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
+              <div className="hidden md:flex items-center gap-2">
+                <span className="text-[11px] text-slate-400">
+                  👤 {userData?.name || user.email}
+                  <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
+                </span>
+                {isAdmin && (
+                  <button onClick={() => setShowAdmin(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙️ Admin</button>
+                )}
+                <button onClick={() => setShowArchived(!showArchived)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${showArchived ? "bg-amber-100 text-amber-700 border-amber-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                  {showArchived ? "📦 Ver activas" : "📦 Archivadas"}
                 </button>
-              )}
-              <button onClick={exportCSV} className="hidden rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors md:block">Export</button>
+                {overdueCount > 0 && !showArchived && (
+                  <button onClick={() => setOverdueOnly(!overdueOnly)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${overdueOnly ? "bg-red-100 text-red-700 border-red-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
+                    🔴 {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
+                  </button>
+                )}
+                <button onClick={exportCSV} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">Export</button>
+                <button onClick={logout} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Salir</button>
+              </div>
               {isAdmin && (
-                <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+ Nueva</button>
+                <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+ Nueva</button>
               )}
-              <button onClick={logout} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Salir</button>
+              <div className="relative md:hidden">
+                <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">☰</button>
+                {showMobileMenu && (
+                  <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-slate-200 bg-white shadow-xl p-2 space-y-1 z-50">
+                    <div className="px-3 py-2 text-xs text-slate-400 border-b border-slate-100">
+                      👤 {userData?.name || user.email}
+                      <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
+                    </div>
+                    {isAdmin && (
+                      <button onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">⚙️ Admin</button>
+                    )}
+                    <button onClick={() => { setShowArchived(!showArchived); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                      {showArchived ? "📦 Activas" : "📦 Archivadas"}
+                    </button>
+                    {overdueCount > 0 && !showArchived && (
+                      <button onClick={() => { setOverdueOnly(!overdueOnly); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
+                        🔴 {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
+                      </button>
+                    )}
+                    <button onClick={() => { exportCSV(); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">📥 Export CSV</button>
+                    <button onClick={logout} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">🚪 Salir</button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </header>
 
         <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar..." className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-slate-400 transition-colors" />
-            <select value={mod} onChange={e => setMod(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
-              <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select value={prio} onChange={e => setPrio(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
-              <option value="Todas">Prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
-            </select>
-            <select value={phase} onChange={e => setPhase(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
-              {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
-            </select>
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar..." className="min-w-[140px] md:min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-slate-400 transition-colors" />
+            <button onClick={() => setShowFilters(!showFilters)} className="md:hidden rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
+              {showFilters ? "▲ Filtros" : "▼ Filtros"}
+            </button>
+            <div className={`${showFilters ? "flex" : "hidden"} md:flex flex-wrap items-center gap-2 w-full md:w-auto`}>
+              <select value={mod} onChange={e => setMod(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+                <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+              <select value={prio} onChange={e => setPrio(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+                <option value="Todas">Prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+              </select>
+              <select value={phase} onChange={e => setPhase(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+                {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
+              </select>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
             {columns.map(({ status, items }) => {
               const colDone = items.filter(t => t.status === "Hecho").length;
               const colTotal = items.length;
@@ -748,7 +781,7 @@ export default function NoraHRKanban() {
               const icons = { Pendiente: "○", "En progreso": "⏳", Bloqueado: "⚠️", Hecho: "✅" };
 
               return (
-                <div key={status} className={`rounded-xl border bg-white shadow-sm ${colAccents.border}`}>
+                <div key={status} className={`min-w-[280px] snap-start md:min-w-0 rounded-xl border bg-white shadow-sm ${colAccents.border}`}>
                   <div className={`flex items-center justify-between rounded-t-xl px-4 py-2.5 ${colAccents.head}`}>
                     <div className="flex items-center gap-2">
                       <button onClick={() => toggleCollapse(status)} className="text-xs opacity-60 hover:opacity-100">{collapsed[status] ? "▶" : "▼"}</button>
