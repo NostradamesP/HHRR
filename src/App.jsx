@@ -1,82 +1,94 @@
-import React, { useMemo, useState, useEffect } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
+import React, { useMemo, useState, useEffect, useCallback } from "react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
 const initialTasks = [
-  { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", priority: "Alta", status: "Pendiente", effort: "Medio" },
-  { id: 2, phase: "V1", module: "Arquitectura", title: "Elegir stack definitivo", priority: "Alta", status: "Pendiente", effort: "Medio" },
-  { id: 3, phase: "V1", module: "Seguridad", title: "Definir modelo de permisos", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 4, phase: "V1", module: "Infraestructura", title: "Crear monorepo inicial", priority: "Alta", status: "Pendiente", effort: "Bajo" },
-  { id: 5, phase: "V1", module: "Diseño", title: "Crear prototipo Figma", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 6, phase: "V2", module: "Auth", title: "Login seguro", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 7, phase: "V2", module: "Auth", title: "MFA para administradores", priority: "Alta", status: "Pendiente", effort: "Medio" },
-  { id: 8, phase: "V2", module: "Empresas", title: "Multi-tenant por company_id", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 9, phase: "V2", module: "Auditoría", title: "Audit logs base", priority: "Alta", status: "Pendiente", effort: "Medio" },
-  { id: 10, phase: "V3", module: "Empleados", title: "CRUD de empleados", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 11, phase: "V3", module: "Flutter", title: "Dashboard de empleado", priority: "Alta", status: "Pendiente", effort: "Medio" },
-  { id: 12, phase: "V3", module: "Solicitudes", title: "Solicitudes de vacaciones", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 13, phase: "V3", module: "Solicitudes", title: "Licencias y permisos", priority: "Media", status: "Pendiente", effort: "Alto" },
-  { id: 14, phase: "V4", module: "Documentos", title: "Storage privado de documentos", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 15, phase: "V4", module: "Documentos", title: "Generador de cartas laborales", priority: "Media", status: "Pendiente", effort: "Medio" },
-  { id: 16, phase: "V5", module: "Reportes", title: "Dashboard RRHH", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 17, phase: "V5", module: "Notificaciones", title: "Notificaciones push/email", priority: "Media", status: "Pendiente", effort: "Medio" },
-  { id: 18, phase: "V6", module: "Nómina", title: "Períodos de nómina", priority: "Media", status: "Pendiente", effort: "Alto" },
-  { id: 19, phase: "V6", module: "Nómina", title: "Recibos de pago PDF", priority: "Media", status: "Pendiente", effort: "Medio" },
-  { id: 20, phase: "V7", module: "Compliance RD", title: "Research TSS/DGII/DGT", priority: "Alta", status: "Pendiente", effort: "Alto" },
-  { id: 21, phase: "V8", module: "BI", title: "Métricas de ausentismo y headcount", priority: "Baja", status: "Pendiente", effort: "Medio" },
-  { id: 22, phase: "V8", module: "IA", title: "Asistente de RRHH futuro", priority: "Baja", status: "Pendiente", effort: "Alto" },
+  { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es NoraHR, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", effort: "Medio" },
+  { id: 2, phase: "V1", module: "Arquitectura", title: "Elegir stack definitivo", description: "Confirmar Flutter + NestJS/FastAPI + PostgreSQL + Docker + storage privado.", priority: "Alta", status: "Pendiente", effort: "Medio" },
+  { id: 3, phase: "V1", module: "Seguridad", title: "Definir modelo de permisos", description: "Crear roles: Super Admin, Empresa Admin, RRHH, Supervisor, Empleado, Nómina y Auditor.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 4, phase: "V1", module: "Infraestructura", title: "Crear monorepo inicial", description: "Estructura apps/mobile, apps/admin, backend, docs e infra.", priority: "Alta", status: "Pendiente", effort: "Bajo" },
+  { id: 5, phase: "V1", module: "Diseño", title: "Crear prototipo Figma", description: "Diseñar login, dashboard empleado, solicitudes, documentos, empleados y panel RRHH.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 6, phase: "V2", module: "Auth", title: "Login seguro", description: "Implementar login con access token corto, refresh token rotativo y cierre de sesión.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 7, phase: "V2", module: "Auth", title: "MFA para administradores", description: "Agregar segundo factor para RRHH, Empresa Admin y Super Admin.", priority: "Alta", status: "Pendiente", effort: "Medio" },
+  { id: 8, phase: "V2", module: "Empresas", title: "Multi-tenant por company_id", description: "Todas las tablas sensibles deben separar datos por empresa desde el backend.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 9, phase: "V2", module: "Auditoría", title: "Audit logs base", description: "Registrar login, cambios de permisos, creación de usuarios y acciones críticas.", priority: "Alta", status: "Pendiente", effort: "Medio" },
+  { id: 10, phase: "V3", module: "Empleados", title: "CRUD de empleados", description: "Crear, editar, activar/desactivar empleados, departamentos, posiciones y datos básicos.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 11, phase: "V3", module: "Flutter", title: "Dashboard de empleado", description: "Pantalla con perfil, solicitudes, documentos, notificaciones y próximos eventos.", priority: "Alta", status: "Pendiente", effort: "Medio" },
+  { id: 12, phase: "V3", module: "Solicitudes", title: "Solicitudes de vacaciones", description: "Empleado solicita vacaciones, supervisor aprueba/rechaza y RRHH puede auditar.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 13, phase: "V3", module: "Solicitudes", title: "Licencias y permisos", description: "Flujo para licencia médica, permiso personal, ausencia y cambio de datos.", priority: "Media", status: "Pendiente", effort: "Alto" },
+  { id: 14, phase: "V4", module: "Documentos", title: "Storage privado de documentos", description: "Subir documentos con permisos, URLs firmadas, expiración y logs de descarga.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 15, phase: "V4", module: "Documentos", title: "Generador de cartas laborales", description: "Plantillas PDF para carta laboral, certificación salarial y constancia de empleo.", priority: "Media", status: "Pendiente", effort: "Medio" },
+  { id: 16, phase: "V5", module: "Reportes", title: "Dashboard RRHH", description: "Mostrar empleados activos, solicitudes pendientes, ausencias, documentos y actividad reciente.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 17, phase: "V5", module: "Notificaciones", title: "Notificaciones push/email", description: "Enviar alertas para aprobaciones, documentos, cambios de estado y tareas pendientes.", priority: "Media", status: "Pendiente", effort: "Medio" },
+  { id: 18, phase: "V6", module: "Nómina", title: "Períodos de nómina", description: "Crear períodos, asignar empleados, ingresos, deducciones y cálculo neto inicial.", priority: "Media", status: "Pendiente", effort: "Alto" },
+  { id: 19, phase: "V6", module: "Nómina", title: "Recibos de pago PDF", description: "Generar recibo de pago consultable desde app empleado y auditable por RRHH.", priority: "Media", status: "Pendiente", effort: "Medio" },
+  { id: 20, phase: "V7", module: "Compliance RD", title: "Research TSS/DGII/DGT", description: "Documentar cálculos, reportes, formatos y responsabilidades legales en República Dominicana.", priority: "Alta", status: "Pendiente", effort: "Alto" },
+  { id: 21, phase: "V8", module: "BI", title: "Métricas de ausentismo y headcount", description: "Crear gráficos por departamento, mes, tipo de ausencia y tendencia de empleados.", priority: "Baja", status: "Pendiente", effort: "Medio" },
+  { id: 22, phase: "V8", module: "IA", title: "Asistente de RRHH futuro", description: "Explorar IA para resumir solicitudes, generar cartas y detectar patrones de ausencias.", priority: "Baja", status: "Pendiente", effort: "Alto" },
 ];
 
 const statuses = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
 
 const phaseMap = { V1: "Fundación", V2: "Auth y empresas", V3: "RRHH Self-Service", V4: "Documentos", V5: "Dashboard Admin", V6: "Payroll Lite", V7: "Cumplimiento RD", V8: "BI + IA" };
 
-const modules = ["Producto", "Arquitectura", "Seguridad", "Infraestructura", "Diseño", "Auth", "Empresas", "Auditoría", "Empleados", "Flutter", "Solicitudes", "Documentos", "Reportes", "Notificaciones", "Nómina", "Compliance RD", "BI", "IA"];
+const phaseColors = { V1: "bg-blue-100 text-blue-700 border-blue-200", V2: "bg-purple-100 text-purple-700 border-purple-200", V3: "bg-green-100 text-green-700 border-green-200", V4: "bg-amber-100 text-amber-700 border-amber-200", V5: "bg-rose-100 text-rose-700 border-rose-200", V6: "bg-cyan-100 text-cyan-700 border-cyan-200", V7: "bg-orange-100 text-orange-700 border-orange-200", V8: "bg-indigo-100 text-indigo-700 border-indigo-200" };
+
+const modColors = { Producto: "bg-sky-100 text-sky-700", Arquitectura: "bg-violet-100 text-violet-700", Seguridad: "bg-red-100 text-red-700", Infraestructura: "bg-slate-100 text-slate-700", Diseño: "bg-pink-100 text-pink-700", Auth: "bg-blue-100 text-blue-700", Empresas: "bg-teal-100 text-teal-700", Auditoría: "bg-yellow-100 text-yellow-700", Empleados: "bg-green-100 text-green-700", Flutter: "bg-cyan-100 text-cyan-700", Solicitudes: "bg-orange-100 text-orange-700", Documentos: "bg-amber-100 text-amber-700", Reportes: "bg-rose-100 text-rose-700", Notificaciones: "bg-fuchsia-100 text-fuchsia-700", Nómina: "bg-emerald-100 text-emerald-700", "Compliance RD": "bg-red-100 text-red-700", BI: "bg-indigo-100 text-indigo-700", IA: "bg-violet-100 text-violet-700" };
+
+const modules = Object.keys(modColors);
 
 const effortWeight = { Alto: 3, Medio: 2, Bajo: 1 };
-const statusScore = { "Bloqueado": 0, "Pendiente": 1, "En progreso": 2, "Hecho": 3 };
 
-function loadTasks() { try { const saved = localStorage.getItem("nt"); return saved ? JSON.parse(saved) : initialTasks; } catch { return initialTasks; } }
+function loadTasks() { try { const s = localStorage.getItem("nt"); return s ? JSON.parse(s) : initialTasks; } catch { return initialTasks; } }
 function saveTasks(t) { try { localStorage.setItem("nt", JSON.stringify(t)); } catch {} }
 
-function filterTasks(tasks, q, mod, prio) {
+function filterTasks(tasks, q, mod, prio, ph) {
   const cq = q.trim().toLowerCase();
   return tasks.filter(t => {
-    const st = [t.title, t.module, t.phase, t.priority].join(" ").toLowerCase();
-    return (cq === "" || st.includes(cq)) && (mod === "Todos" || t.module === mod) && (prio === "Todas" || t.priority === prio);
+    const st = [t.title, t.module, t.phase, t.priority, t.description].join(" ").toLowerCase();
+    return (cq === "" || st.includes(cq)) && (mod === "Todos" || t.module === mod) && (prio === "Todas" || t.priority === prio) && (ph === "Todas" || t.phase === ph);
   });
 }
 
-function PriorityDot({ p }) {
-  const c = p === "Alta" ? "bg-red-500" : p === "Media" ? "bg-amber-500" : "bg-slate-400";
-  return <span className={`inline-block h-2 w-2 rounded-full ${c}`} />;
+const effortLabels = { Alto: "🔥 Alto", Medio: "⚡ Medio", Bajo: "💤 Bajo" };
+
+function priorityColor(p) { return p === "Alta" ? "bg-red-500" : p === "Media" ? "bg-amber-500" : "bg-slate-400"; }
+
+function pickTextColor(bgClass) {
+  const dark = ["bg-sky-100", "bg-violet-100", "bg-red-100", "bg-slate-100", "bg-pink-100", "bg-blue-100", "bg-teal-100", "bg-yellow-100", "bg-green-100", "bg-cyan-100", "bg-orange-100", "bg-amber-100", "bg-rose-100", "bg-fuchsia-100", "bg-emerald-100", "bg-indigo-100"];
+  return "text-slate-700";
 }
 
-function Card({ t, onStatus, onDelete, onEdit }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: t.id });
+function ColumnPlaceholder({ status }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
+  return <div ref={setNodeRef} className={`min-h-[60px] rounded-xl border-2 border-dashed p-3 text-center text-sm transition-colors ${isOver ? "border-blue-400 bg-blue-50" : "border-slate-200 text-slate-300"}`}>Suelta aquí</div>;
+}
+
+function SortableCard({ task, onSelect }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   return (
-    <div ref={setNodeRef} style={s} {...attributes} {...listeners} className={`group rounded-xl border bg-white p-3.5 shadow-sm transition-all ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-10" : "hover:shadow-md hover:-translate-y-0.5"}`}>
-      <div className="mb-2 flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <PriorityDot p={t.priority} />
-          <span className="text-[11px] font-medium uppercase tracking-wider text-slate-400">{t.module}</span>
+    <div ref={setNodeRef} style={s} {...attributes} {...listeners}
+      onClick={() => onSelect(task)}
+      className={`group cursor-grab active:cursor-grabbing rounded-xl border bg-white p-3 shadow-sm transition-all ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${priorityColor(task.priority)}`} />
+          <span className={`truncate rounded-md px-2 py-0.5 text-[10px] font-semibold ${modColors[task.module] || "bg-slate-100 text-slate-600"}`}>{task.module}</span>
         </div>
-        <div className="flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-          <button onClick={(e) => { e.stopPropagation(); onEdit(t); }} className="rounded-lg px-1.5 py-0.5 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">✎</button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="rounded-lg px-1.5 py-0.5 text-xs text-slate-400 hover:bg-red-50 hover:text-red-500 transition-colors">✕</button>
-        </div>
+        <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase}</span>
       </div>
-      <h3 className="text-sm font-semibold leading-snug text-slate-900">{t.title}</h3>
-      <div className="mt-2 flex items-center gap-2">
-        <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">{t.phase} · {phaseMap[t.phase]}</span>
-        <span className="text-[11px] text-slate-400">{t.effort}</span>
+      <h3 className="text-sm font-semibold leading-snug text-slate-900">{task.title}</h3>
+      <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
+        <span>{effortLabels[task.effort]}</span>
+        <span className="text-slate-300">·</span>
+        <span className="truncate">{task.description}</span>
       </div>
-      <div className="mt-3 flex gap-1">
-        {statuses.filter(s => s !== t.status).map(s => (
-          <button key={s} onClick={(e) => { e.stopPropagation(); onStatus(t.id, s); }} className="rounded-md border px-2 py-0.5 text-[10px] font-medium text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">{s}</button>
+      <div className="mt-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+        {statuses.filter(s => s !== task.status).slice(0, 2).map(s => (
+          <span key={s} className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">{s}</span>
         ))}
       </div>
     </div>
@@ -84,10 +96,11 @@ function Card({ t, onStatus, onDelete, onEdit }) {
 }
 
 function Modal({ open, onClose, children }) {
+  useEffect(() => { if (open) document.body.style.overflow = "hidden"; else document.body.style.overflow = ""; return () => { document.body.style.overflow = ""; }; }, [open]);
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-md rounded-2xl border bg-white p-6 shadow-2xl" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-lg rounded-2xl border bg-white p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -95,20 +108,52 @@ function Modal({ open, onClose, children }) {
 }
 
 function TaskForm({ onSave, onClose, initial }) {
-  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio" });
+  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio", description: "" });
   return (
     <div className="space-y-4">
-      <h2 className="text-lg font-bold">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
-      <input placeholder="Título" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className="w-full rounded-xl border px-3 py-2.5 text-sm outline-none focus:border-blue-500" autoFocus />
+      <h2 className="text-lg font-bold text-slate-900">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
+      <input placeholder="Título" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" autoFocus />
+      <textarea placeholder="Descripción (opcional)" value={f.description || ""} onChange={e => setF({ ...f, description: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" rows={2} />
       <div className="grid grid-cols-2 gap-3">
-        <select value={f.module} onChange={e => setF({ ...f, module: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm outline-none">{modules.map(m => <option key={m} value={m}>{m}</option>)}</select>
-        <select value={f.phase} onChange={e => setF({ ...f, phase: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm outline-none">{Object.entries(phaseMap).map(([k, v]) => <option key={k} value={k}>{k} - {v}</option>)}</select>
-        <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm outline-none"><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select>
-        <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border px-3 py-2.5 text-sm outline-none"><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select>
+        <select value={f.module} onChange={e => setF({ ...f, module: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">{modules.map(m => <option key={m} value={m}>{m}</option>)}</select>
+        <select value={f.phase} onChange={e => setF({ ...f, phase: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">{Object.entries(phaseMap).map(([k, v]) => <option key={k} value={k}>{k} - {v}</option>)}</select>
+        <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">💤 Baja</option></select>
+        <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alto">🔥 Alto</option><option value="Medio">⚡ Medio</option><option value="Bajo">💤 Bajo</option></select>
       </div>
       <div className="flex gap-3 pt-1">
         <button onClick={() => f.title && onSave({ ...f, id: initial?.id || Date.now() })} disabled={!f.title} className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">{initial ? "Actualizar" : "Agregar"}</button>
-        <button onClick={onClose} className="flex-1 rounded-xl border py-2.5 text-sm font-semibold hover:bg-slate-50 transition-colors">Cancelar</button>
+        <button onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function TaskDetail({ task, onEdit, onDelete, onClose, onStatus }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <span className={`inline-block h-3 w-3 rounded-full ${priorityColor(task.priority)}`} />
+          <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${modColors[task.module] || "bg-slate-100 text-slate-600"}`}>{task.module}</span>
+        </div>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+      </div>
+      <h2 className="text-xl font-bold text-slate-900">{task.title}</h2>
+      <p className="text-sm leading-6 text-slate-500">{task.description || "Sin descripción"}</p>
+      <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4">
+        <div><span className="text-xs font-medium text-slate-400">Estado</span><p className="text-sm font-semibold text-slate-700">{task.status === "Hecho" ? "✅" : task.status === "En progreso" ? "⏳" : task.status === "Bloqueado" ? "⚠️" : "○"} {task.status}</p></div>
+        <div><span className="text-xs font-medium text-slate-400">Prioridad</span><p className="text-sm font-semibold text-slate-700">{task.priority}</p></div>
+        <div><span className="text-xs font-medium text-slate-400">Fase</span><p className="text-sm font-semibold text-slate-700">{task.phase} - {phaseMap[task.phase]}</p></div>
+        <div><span className="text-xs font-medium text-slate-400">Esfuerzo</span><p className="text-sm font-semibold text-slate-700">{effortLabels[task.effort]}</p></div>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {statuses.filter(s => s !== task.status).map(s => (
+          <button key={s} onClick={() => { onStatus(task.id, s); onClose(); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">→ {s}</button>
+        ))}
+      </div>
+      <div className="flex gap-3 border-t border-slate-100 pt-4">
+        <button onClick={() => { onEdit(task); onClose(); }} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">✎ Editar</button>
+        <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">🗑️ Eliminar</button>
       </div>
     </div>
   );
@@ -119,36 +164,77 @@ export default function NoraHRKanban() {
   const [query, setQuery] = useState("");
   const [mod, setMod] = useState("Todos");
   const [prio, setPrio] = useState("Todas");
+  const [phase, setPhase] = useState("Todas");
   const [showAdd, setShowAdd] = useState(false);
   const [editT, setEditT] = useState(null);
+  const [detailT, setDetailT] = useState(null);
+  const [collapsed, setCollapsed] = useState({});
 
   useEffect(() => saveTasks(tasks), [tasks]);
 
-  const sensors = useSensors(useSensor(PointerSensor), useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }));
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
 
-  const filtered = useMemo(() => filterTasks(tasks, query, mod, prio), [tasks, query, mod, prio]);
-  const grouped = useMemo(() => statuses.map(s => ({ status: s, items: filtered.filter(t => t.status === s) })), [filtered]);
+  const filtered = useMemo(() => filterTasks(tasks, query, mod, prio, phase), [tasks, query, mod, prio, phase]);
+
+  const columns = useMemo(() => {
+    const byCol = {};
+    statuses.forEach(s => byCol[s] = []);
+    filtered.forEach(t => { if (byCol[t.status]) byCol[t.status].push(t); });
+    return statuses.map(s => ({ status: s, items: byCol[s] }));
+  }, [filtered]);
 
   const done = tasks.filter(t => t.status === "Hecho").length;
   const progress = Math.round((done / tasks.length) * 100);
   const effortDone = tasks.filter(t => t.status === "Hecho").reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
   const effortTotal = tasks.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
 
-  function handleDrag(e) {
+  function handleDragEnd(e) {
     const { active, over } = e;
-    if (!over || active.id === over.id) return;
-    setTasks(items => {
-      const oldIdx = items.findIndex(t => t.id === active.id);
-      const newIdx = items.findIndex(t => t.id === over.id);
-      const moved = [...items];
-      const [removed] = moved.splice(oldIdx, 1);
-      moved.splice(newIdx, 0, removed);
-      return moved;
-    });
+    if (!over) return;
+
+    const taskId = Number(active.id);
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+
+    const overStr = String(over.id);
+
+    if (overStr.startsWith("column-")) {
+      const targetStatus = overStr.replace("column-", "");
+      setTasks(ts => ts.map(t => t.id === taskId ? { ...t, status: targetStatus } : t));
+      return;
+    }
+
+    const overTaskId = Number(over.id);
+    const overTask = tasks.find(t => t.id === overTaskId);
+    if (!overTask) return;
+
+    if (task.status !== overTask.status) {
+      setTasks(ts => ts.map(t => t.id === taskId ? { ...t, status: overTask.status } : t));
+      return;
+    }
+
+    if (active.id !== over.id) {
+      setTasks(ts => {
+        const sameStatus = ts.filter(t => t.status === task.status);
+        const oldIdx = sameStatus.findIndex(t => t.id === active.id);
+        const newIdx = sameStatus.findIndex(t => t.id === over.id);
+        if (oldIdx === -1 || newIdx === -1) return ts;
+
+        const reordered = [...sameStatus];
+        const [moved] = reordered.splice(oldIdx, 1);
+        reordered.splice(newIdx, 0, moved);
+
+        const others = ts.filter(t => t.status !== task.status);
+        return [...others, ...reordered];
+      });
+    }
   }
 
   function updateStatus(id, s) { setTasks(ts => ts.map(t => t.id === id ? { ...t, status: s } : t)); }
-  function deleteTask(id) { if (confirm("¿Eliminar esta tarea?")) setTasks(ts => ts.filter(t => t.id !== id)); }
+  function deleteTask(id) { setTasks(ts => ts.filter(t => t.id !== id)); }
   function addTask(f) { setTasks(ts => [...ts, { ...f, status: "Pendiente" }]); setShowAdd(false); }
   function editTask(f) { setTasks(ts => ts.map(t => t.id === f.id ? f : t)); setEditT(null); }
 
@@ -159,50 +245,96 @@ export default function NoraHRKanban() {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "norahr-tasks.csv"; a.click();
   }
 
+  function toggleCollapse(s) { setCollapsed(c => ({ ...c, [s]: !c[s] })); }
+
+  const phasesOptions = ["Todas", ...Object.keys(phaseMap)];
+
   return (
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDrag}>
-      <div className="min-h-screen bg-slate-50 p-4 md:p-6">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">NoraHR Roadmap</h1>
-              <p className="text-sm text-slate-400">{tasks.length} tareas · {done} completadas · {progress}% done · {Math.round((effortDone / effortTotal) * 100)}% effort</p>
-            </div>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <div className="min-h-screen bg-[#f8f9fa]">
+        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
+          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6">
             <div className="flex items-center gap-3">
-              <button onClick={exportCSV} className="rounded-xl border bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition-colors">Export</button>
-              <button onClick={() => setShowAdd(true)} className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 transition-colors">+ Tarea</button>
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">N</span>
+              <div>
+                <h1 className="text-sm font-bold text-slate-900">NoraHR Roadmap</h1>
+                <p className="text-[11px] text-slate-400">{tasks.length} tareas · {progress}% · {Math.round((effortDone / effortTotal) * 100)}% esfuerzo</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button onClick={exportCSV} className="hidden rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors md:block">Export</button>
+              <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+ Nueva</button>
             </div>
           </div>
+        </header>
 
-          <div className="mb-6 flex flex-wrap items-center gap-3">
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar tarea..." className="min-w-[200px] rounded-xl border bg-white px-4 py-2 text-sm outline-none focus:border-slate-400" />
-            <select value={mod} onChange={e => setMod(e.target.value)} className="rounded-xl border bg-white px-4 py-2 text-sm outline-none">
-              <option value="Todos">Todos módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
+        <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5">
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar..." className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-slate-400 transition-colors" />
+            <select value={mod} onChange={e => setMod(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+              <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
-            <select value={prio} onChange={e => setPrio(e.target.value)} className="rounded-xl border bg-white px-4 py-2 text-sm outline-none">
-              <option value="Todas">Todas prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+            <select value={prio} onChange={e => setPrio(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+              <option value="Todas">Prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+            </select>
+            <select value={phase} onChange={e => setPhase(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+              {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
             </select>
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-            {grouped.map(({ status, items }) => {
-              const progressCol = status === "Hecho" ? "text-emerald-600 bg-emerald-50" : status === "En progreso" ? "text-blue-600 bg-blue-50" : status === "Bloqueado" ? "text-rose-600 bg-rose-50" : "text-slate-600 bg-slate-100";
-              const borderCol = status === "Hecho" ? "border-emerald-200" : status === "En progreso" ? "border-blue-200" : status === "Bloqueado" ? "border-rose-200" : "border-slate-200";
+            {columns.map(({ status, items }) => {
+              const colDone = items.filter(t => t.status === "Hecho").length;
+              const colTotal = items.length;
+              const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
+
+              const colAccents = {
+                Pendiente: { head: "bg-slate-100 text-slate-600", count: "bg-slate-200 text-slate-600", border: "border-slate-200", bar: "bg-slate-300" },
+                "En progreso": { head: "bg-blue-100 text-blue-600", count: "bg-blue-200 text-blue-600", border: "border-blue-200", bar: "bg-blue-500" },
+                Bloqueado: { head: "bg-rose-100 text-rose-600", count: "bg-rose-200 text-rose-600", border: "border-rose-200", bar: "bg-rose-500" },
+                Hecho: { head: "bg-emerald-100 text-emerald-600", count: "bg-emerald-200 text-emerald-600", border: "border-emerald-200", bar: "bg-emerald-500" },
+              }[status];
+
+              const icons = { Pendiente: "○", "En progreso": "⏳", Bloqueado: "⚠️", Hecho: "✅" };
+
               return (
-                <div key={status} className={`rounded-2xl border bg-white/60 p-4 ${borderCol}`}>
-                  <div className="mb-4 flex items-center justify-between">
+                <div key={status} className={`rounded-xl border bg-white shadow-sm ${colAccents.border}`}>
+                  <div className={`flex items-center justify-between rounded-t-xl px-4 py-2.5 ${colAccents.head}`}>
                     <div className="flex items-center gap-2">
-                      <span className="text-lg">{status === "Hecho" ? "✅" : status === "En progreso" ? "⏳" : status === "Bloqueado" ? "⚠️" : "○"}</span>
-                      <h2 className="font-semibold text-slate-900">{status}</h2>
+                      <button onClick={() => toggleCollapse(status)} className="text-xs opacity-60 hover:opacity-100">{collapsed[status] ? "▶" : "▼"}</button>
+                      <span className="text-sm">{icons[status]}</span>
+                      <h2 className="text-sm font-semibold">{status}</h2>
                     </div>
-                    <span className={`rounded-lg px-2.5 py-0.5 text-xs font-semibold ${progressCol}`}>{items.length}</span>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${colAccents.count}`}>{items.length}</span>
+                      {!collapsed[status] && colTotal > 0 && (
+                        <span className="text-[10px] text-slate-400">
+                          {items.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0)}pts
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                    <div className="space-y-3">
-                      {items.map(t => <Card key={t.id} t={t} onStatus={updateStatus} onDelete={deleteTask} onEdit={setEditT} />)}
-                      {items.length === 0 && <div className="rounded-xl border-2 border-dashed p-6 text-center text-sm text-slate-300">Arrastra tareas aquí</div>}
+                  <div className={`overflow-hidden transition-all ${collapsed[status] ? "max-h-0" : "max-h-[9999px]"}`}>
+                    {colTotal > 0 && (
+                      <div className="px-4 pt-3">
+                        <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+                          <span>Progreso</span>
+                          <span>{colProgress}%</span>
+                        </div>
+                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                          <div className={`h-full rounded-full transition-all duration-300 ${colAccents.bar}`} style={{ width: `${colProgress}%` }} />
+                        </div>
+                      </div>
+                    )}
+                    <div className="p-3">
+                      <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2.5">
+                          {items.map(t => <SortableCard key={t.id} task={t} onSelect={setDetailT} />)}
+                          <ColumnPlaceholder status={status} />
+                        </div>
+                      </SortableContext>
                     </div>
-                  </SortableContext>
+                  </div>
                 </div>
               );
             })}
@@ -213,8 +345,13 @@ export default function NoraHRKanban() {
       <Modal open={showAdd} onClose={() => setShowAdd(false)}>
         <TaskForm onSave={addTask} onClose={() => setShowAdd(false)} />
       </Modal>
+
       <Modal open={!!editT} onClose={() => setEditT(null)}>
         {editT && <TaskForm onSave={editTask} onClose={() => setEditT(null)} initial={editT} />}
+      </Modal>
+
+      <Modal open={!!detailT} onClose={() => setDetailT(null)}>
+        {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} />}
       </Modal>
     </DndContext>
   );
