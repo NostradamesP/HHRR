@@ -83,6 +83,13 @@ const effortLabels = { Alto: "🔥 Alto", Medio: "⚡ Medio", Bajo: "💤 Bajo" 
 
 function priorityColor(p) { return p === "Alta" ? "bg-red-500" : p === "Media" ? "bg-amber-500" : "bg-slate-400"; }
 
+function DroppableZone({ status }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
+  return (
+    <div ref={setNodeRef} className={`min-h-[40px] rounded-lg border-2 border-dashed transition-colors ${isOver ? "border-blue-400 bg-blue-50" : "border-transparent"}`} />
+  );
+}
+
 function CardContent({ task }) {
   return (
     <>
@@ -136,8 +143,6 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }
 }
 
 function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
-
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
   const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
@@ -152,7 +157,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
   const icons = { Pendiente: "○", "En progreso": "⏳", Bloqueado: "⚠️", Hecho: "✅" };
 
   return (
-    <div ref={setNodeRef} className={`min-w-[280px] snap-start md:min-w-0 rounded-xl border bg-white shadow-sm transition-all ${colAccents.border} ${isOver ? "ring-2 ring-blue-400 bg-blue-50/30" : ""}`}>
+    <div className={`min-w-[280px] snap-start md:min-w-0 rounded-xl border bg-white shadow-sm ${colAccents.border}`}>
       <div className={`flex items-center justify-between rounded-t-xl px-4 py-2.5 ${colAccents.head}`}>
         <div className="flex items-center gap-2">
           <button onClick={() => toggleCollapse(status)} className="text-xs opacity-60 hover:opacity-100">{collapsed[status] ? "▶" : "▼"}</button>
@@ -184,6 +189,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
           <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2.5">
               {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} />)}
+              {isAdmin && <DroppableZone status={status} />}
             </div>
           </SortableContext>
         </div>
