@@ -711,6 +711,7 @@ export default function NoraHRKanban() {
   if (!user) return <LoginForm />;
 
   return (
+    <>
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <div className="min-h-screen bg-[#f8f9fa]">
         <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
@@ -870,14 +871,15 @@ export default function NoraHRKanban() {
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
         <AdminPanel users={users} currentUser={user} onClose={() => setShowAdmin(false)} />
       </Modal>
-
-      <button
-        onClick={() => setSidebarOpen(!sidebarOpen)}
-        className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center h-20 w-5 rounded-l-lg border border-r-0 border-slate-200 bg-white shadow-sm text-xs text-slate-400 hover:text-slate-600 hover:shadow-md transition-all cursor-pointer"
-      >
-        {sidebarOpen ? "▶" : "◀"}
-      </button>
-      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     </DndContext>
+
+    <button
+      onClick={() => setSidebarOpen(!sidebarOpen)}
+      className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 items-center justify-center h-20 w-6 rounded-l-lg border border-r-0 border-slate-300 bg-white shadow-md text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all cursor-pointer"
+    >
+      {sidebarOpen ? "▶" : "◀"}
+    </button>
+    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    </>
   );
 }
