@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
+import React, { Component, useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -7,6 +7,32 @@ import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
 import Sidebar from "./Sidebar";
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error, info) {
+    console.error("ErrorBoundary caught:", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 text-center">
+          <p className="text-sm text-red-500 mb-2">Error al mostrar el modal</p>
+          <button onClick={() => this.setState({ hasError: false })} className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 const initialTasks = [
   { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es NoraHR, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", effort: "Medio" },
@@ -169,6 +195,8 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     );
     const unsub = onSnapshot(q, (snap) => {
       setLogs(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Logs listener error:", err);
     });
     return unsub;
   }, [task.id, activeBoardId]);
@@ -834,13 +862,21 @@ export default function NoraHRKanban() {
       </Modal>
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)}>
-        {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={isAdmin} activeBoardId={activeBoardId} />}
+        <ErrorBoundary key={detailT?.id}>
+          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={isAdmin} activeBoardId={activeBoardId} />}
+        </ErrorBoundary>
       </Modal>
 
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
         <AdminPanel users={users} currentUser={user} onClose={() => setShowAdmin(false)} />
       </Modal>
 
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-30 items-center justify-center h-20 w-5 rounded-l-lg border border-r-0 border-slate-200 bg-white shadow-sm text-xs text-slate-400 hover:text-slate-600 hover:shadow-md transition-all cursor-pointer"
+      >
+        {sidebarOpen ? "▶" : "◀"}
+      </button>
       <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     </DndContext>
   );
