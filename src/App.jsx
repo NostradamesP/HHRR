@@ -1,5 +1,5 @@
 import React, { Component, useMemo, useState, useEffect, useRef } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable } from "@dnd-kit/core";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, DragOverlay } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
@@ -83,27 +83,9 @@ const effortLabels = { Alto: "🔥 Alto", Medio: "⚡ Medio", Bajo: "💤 Bajo" 
 
 function priorityColor(p) { return p === "Alta" ? "bg-red-500" : p === "Media" ? "bg-amber-500" : "bg-slate-400"; }
 
-function ColumnPlaceholder({ status }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
-  return <div ref={setNodeRef} className={`min-h-[60px] rounded-xl border-2 border-dashed p-3 text-center text-sm transition-colors ${isOver ? "border-blue-400 bg-blue-50" : "border-slate-200 text-slate-300"}`}>Suelta aquí</div>;
-}
-
-function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
-  const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
-
+function CardContent({ task }) {
   return (
-    <div ref={setNodeRef} style={s} {...((isAdmin && !deleteMode) ? { ...attributes, ...listeners } : {})}
-      onClick={(deleteMode ? undefined : () => onSelect(task))}
-      className={`group relative rounded-xl border bg-white p-2.5 md:p-3 shadow-sm transition-all ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
-      {deleteMode && isAdmin && (
-        <button
-          onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); } }}
-          className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white shadow hover:bg-red-600 transition-colors"
-        >
-          ✕
-        </button>
-      )}
+    <>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${priorityColor(task.priority)}`} />
@@ -128,6 +110,84 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }
       {task.dueDate && (
         <DueDateBadge dueDate={task.dueDate} />
       )}
+    </>
+  );
+}
+
+function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
+  const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+
+  return (
+    <div ref={setNodeRef} style={s} {...((isAdmin && !deleteMode) ? { ...attributes, ...listeners } : {})}
+      onClick={(deleteMode ? undefined : () => onSelect(task))}
+      className={`group relative rounded-xl border bg-white p-2.5 md:p-3 shadow-sm transition-all ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+      {deleteMode && isAdmin && (
+        <button
+          onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); } }}
+          className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white shadow hover:bg-red-600 transition-colors"
+        >
+          ✕
+        </button>
+      )}
+      <CardContent task={task} />
+    </div>
+  );
+}
+
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
+
+  const colDone = items.filter(t => t.status === "Hecho").length;
+  const colTotal = items.length;
+  const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
+
+  const colAccents = {
+    Pendiente: { head: "bg-slate-100 text-slate-600", count: "bg-slate-200 text-slate-600", border: "border-slate-200", bar: "bg-slate-300" },
+    "En progreso": { head: "bg-blue-100 text-blue-600", count: "bg-blue-200 text-blue-600", border: "border-blue-200", bar: "bg-blue-500" },
+    Bloqueado: { head: "bg-rose-100 text-rose-600", count: "bg-rose-200 text-rose-600", border: "border-rose-200", bar: "bg-rose-500" },
+    Hecho: { head: "bg-emerald-100 text-emerald-600", count: "bg-emerald-200 text-emerald-600", border: "border-emerald-200", bar: "bg-emerald-500" },
+  }[status];
+
+  const icons = { Pendiente: "○", "En progreso": "⏳", Bloqueado: "⚠️", Hecho: "✅" };
+
+  return (
+    <div ref={setNodeRef} className={`min-w-[280px] snap-start md:min-w-0 rounded-xl border bg-white shadow-sm transition-all ${colAccents.border} ${isOver ? "ring-2 ring-blue-400 bg-blue-50/30" : ""}`}>
+      <div className={`flex items-center justify-between rounded-t-xl px-4 py-2.5 ${colAccents.head}`}>
+        <div className="flex items-center gap-2">
+          <button onClick={() => toggleCollapse(status)} className="text-xs opacity-60 hover:opacity-100">{collapsed[status] ? "▶" : "▼"}</button>
+          <span className="text-sm">{icons[status]}</span>
+          <h2 className="text-sm font-semibold">{status}</h2>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${colAccents.count}`}>{items.length}</span>
+          {!collapsed[status] && colTotal > 0 && (
+            <span className="text-[10px] text-slate-400">
+              {items.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0)}pts
+            </span>
+          )}
+        </div>
+      </div>
+      <div className={`overflow-hidden transition-all ${collapsed[status] ? "max-h-0" : "max-h-[9999px]"}`}>
+        {colTotal > 0 && (
+          <div className="px-4 pt-3">
+            <div className="flex justify-between text-[10px] text-slate-400 mb-1">
+              <span>Progreso</span>
+              <span>{colProgress}%</span>
+            </div>
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+              <div className={`h-full rounded-full transition-all duration-300 ${colAccents.bar}`} style={{ width: `${colProgress}%` }} />
+            </div>
+          </div>
+        )}
+        <div className="p-3">
+          <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2.5">
+              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} />)}
+            </div>
+          </SortableContext>
+        </div>
+      </div>
     </div>
   );
 }
@@ -486,6 +546,8 @@ export default function NoraHRKanban() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
+  const [activeId, setActiveId] = useState(null);
+  const activeTask = useMemo(() => tasks.find(t => t.id === activeId), [activeId, tasks]);
   const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(boards);
@@ -673,6 +735,7 @@ export default function NoraHRKanban() {
         console.error("Error updating task status:", e);
       }
     }
+    setActiveId(null);
   }
 
   async function updateStatus(id, s) {
@@ -764,7 +827,7 @@ export default function NoraHRKanban() {
 
   return (
     <>
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
       <div className="min-h-screen bg-[#f8f9fa]">
         <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6">
@@ -850,61 +913,9 @@ export default function NoraHRKanban() {
           </div>
 
           <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
-            {columns.map(({ status, items }) => {
-              const colDone = items.filter(t => t.status === "Hecho").length;
-              const colTotal = items.length;
-              const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
-
-              const colAccents = {
-                Pendiente: { head: "bg-slate-100 text-slate-600", count: "bg-slate-200 text-slate-600", border: "border-slate-200", bar: "bg-slate-300" },
-                "En progreso": { head: "bg-blue-100 text-blue-600", count: "bg-blue-200 text-blue-600", border: "border-blue-200", bar: "bg-blue-500" },
-                Bloqueado: { head: "bg-rose-100 text-rose-600", count: "bg-rose-200 text-rose-600", border: "border-rose-200", bar: "bg-rose-500" },
-                Hecho: { head: "bg-emerald-100 text-emerald-600", count: "bg-emerald-200 text-emerald-600", border: "border-emerald-200", bar: "bg-emerald-500" },
-              }[status];
-
-              const icons = { Pendiente: "○", "En progreso": "⏳", Bloqueado: "⚠️", Hecho: "✅" };
-
-              return (
-                <div key={status} className={`min-w-[280px] snap-start md:min-w-0 rounded-xl border bg-white shadow-sm ${colAccents.border}`}>
-                  <div className={`flex items-center justify-between rounded-t-xl px-4 py-2.5 ${colAccents.head}`}>
-                    <div className="flex items-center gap-2">
-                      <button onClick={() => toggleCollapse(status)} className="text-xs opacity-60 hover:opacity-100">{collapsed[status] ? "▶" : "▼"}</button>
-                      <span className="text-sm">{icons[status]}</span>
-                      <h2 className="text-sm font-semibold">{status}</h2>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${colAccents.count}`}>{items.length}</span>
-                      {!collapsed[status] && colTotal > 0 && (
-                        <span className="text-[10px] text-slate-400">
-                          {items.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0)}pts
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className={`overflow-hidden transition-all ${collapsed[status] ? "max-h-0" : "max-h-[9999px]"}`}>
-                    {colTotal > 0 && (
-                      <div className="px-4 pt-3">
-                        <div className="flex justify-between text-[10px] text-slate-400 mb-1">
-                          <span>Progreso</span>
-                          <span>{colProgress}%</span>
-                        </div>
-                        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-                          <div className={`h-full rounded-full transition-all duration-300 ${colAccents.bar}`} style={{ width: `${colProgress}%` }} />
-                        </div>
-                      </div>
-                    )}
-                    <div className="p-3">
-                      <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-2.5">
-                          {items.map(t => <SortableCard key={t.id} task={t} onSelect={setDetailT} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={deleteTask} />)}
-                          {isAdmin && <ColumnPlaceholder status={status} />}
-                        </div>
-                      </SortableContext>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
+            {columns.map(({ status, items }) => (
+              <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={isAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} />
+            ))}
           </div>
         </div>
       </div>
@@ -926,6 +937,14 @@ export default function NoraHRKanban() {
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
         <AdminPanel users={users} currentUser={user} onClose={() => setShowAdmin(false)} />
       </Modal>
+
+      <DragOverlay>
+        {activeTask && (
+          <div className="rounded-xl border bg-white p-2.5 md:p-3 shadow-xl rotate-2 scale-105 ring-2 ring-slate-400">
+            <CardContent task={activeTask} />
+          </div>
+        )}
+      </DragOverlay>
     </DndContext>
 
     <button
