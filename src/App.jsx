@@ -1,7 +1,10 @@
-import React, { useMemo, useState, useEffect, useCallback } from "react";
+import React, { useMemo, useState, useEffect, useCallback, useRef } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { collection, onSnapshot, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { db } from "./firebase";
+import { useAuth } from "./AuthContext";
 
 const initialTasks = [
   { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es NoraHR, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", effort: "Medio" },
@@ -40,9 +43,6 @@ const modules = Object.keys(modColors);
 
 const effortWeight = { Alto: 3, Medio: 2, Bajo: 1 };
 
-function loadTasks() { try { const s = localStorage.getItem("nt"); return s ? JSON.parse(s) : initialTasks; } catch { return initialTasks; } }
-function saveTasks(t) { try { localStorage.setItem("nt", JSON.stringify(t)); } catch {} }
-
 function filterTasks(tasks, q, mod, prio, ph) {
   const cq = q.trim().toLowerCase();
   return tasks.filter(t => {
@@ -55,24 +55,19 @@ const effortLabels = { Alto: "🔥 Alto", Medio: "⚡ Medio", Bajo: "💤 Bajo" 
 
 function priorityColor(p) { return p === "Alta" ? "bg-red-500" : p === "Media" ? "bg-amber-500" : "bg-slate-400"; }
 
-function pickTextColor(bgClass) {
-  const dark = ["bg-sky-100", "bg-violet-100", "bg-red-100", "bg-slate-100", "bg-pink-100", "bg-blue-100", "bg-teal-100", "bg-yellow-100", "bg-green-100", "bg-cyan-100", "bg-orange-100", "bg-amber-100", "bg-rose-100", "bg-fuchsia-100", "bg-emerald-100", "bg-indigo-100"];
-  return "text-slate-700";
-}
-
 function ColumnPlaceholder({ status }) {
   const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
   return <div ref={setNodeRef} className={`min-h-[60px] rounded-xl border-2 border-dashed p-3 text-center text-sm transition-colors ${isOver ? "border-blue-400 bg-blue-50" : "border-slate-200 text-slate-300"}`}>Suelta aquí</div>;
 }
 
-function SortableCard({ task, onSelect }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+function SortableCard({ task, onSelect, isAdmin, userMap }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   return (
-    <div ref={setNodeRef} style={s} {...attributes} {...listeners}
+    <div ref={setNodeRef} style={s} {...(isAdmin ? { ...attributes, ...listeners } : {})}
       onClick={() => onSelect(task)}
-      className={`group cursor-grab active:cursor-grabbing rounded-xl border bg-white p-3 shadow-sm transition-all ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+      className={`group rounded-xl border bg-white p-3 shadow-sm transition-all ${isAdmin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${priorityColor(task.priority)}`} />
@@ -86,11 +81,12 @@ function SortableCard({ task, onSelect }) {
         <span className="text-slate-300">·</span>
         <span className="truncate">{task.description}</span>
       </div>
-      <div className="mt-2 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        {statuses.filter(s => s !== task.status).slice(0, 2).map(s => (
-          <span key={s} className="rounded-md bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">{s}</span>
-        ))}
-      </div>
+      {task.assignedName && (
+        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-500">
+          <span>👤</span>
+          <span className="truncate">{task.assignedName}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -107,8 +103,9 @@ function Modal({ open, onClose, children }) {
   );
 }
 
-function TaskForm({ onSave, onClose, initial }) {
-  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio", description: "" });
+function TaskForm({ onSave, onClose, initial, users }) {
+  const { isAdmin } = useAuth();
+  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio", description: "", assignedTo: "", assignedName: "" });
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
@@ -120,15 +117,34 @@ function TaskForm({ onSave, onClose, initial }) {
         <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">💤 Baja</option></select>
         <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alto">🔥 Alto</option><option value="Medio">⚡ Medio</option><option value="Bajo">💤 Bajo</option></select>
       </div>
+      {isAdmin && users.length > 0 && (
+        <select value={f.assignedTo} onChange={e => {
+          const u = users.find(u => u.id === e.target.value);
+          setF({ ...f, assignedTo: e.target.value, assignedName: u ? u.name : "" });
+        }} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">
+          <option value="">Sin asignar</option>
+          {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+        </select>
+      )}
       <div className="flex gap-3 pt-1">
-        <button onClick={() => f.title && onSave({ ...f, id: initial?.id || Date.now() })} disabled={!f.title} className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">{initial ? "Actualizar" : "Agregar"}</button>
+        <button onClick={() => f.title && onSave({ ...f, id: initial?.id })} disabled={!f.title} className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">{initial ? "Actualizar" : "Agregar"}</button>
         <button onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
       </div>
     </div>
   );
 }
 
-function TaskDetail({ task, onEdit, onDelete, onClose, onStatus }) {
+function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin }) {
+  const statusOrder = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
+  const currentIdx = statusOrder.indexOf(task.status);
+
+  const availableStatuses = isAdmin
+    ? statuses.filter(s => s !== task.status)
+    : statuses.filter(s => {
+        const targetIdx = statusOrder.indexOf(s);
+        return targetIdx > currentIdx && s !== "Bloqueado";
+      });
+
   return (
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
@@ -145,23 +161,161 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus }) {
         <div><span className="text-xs font-medium text-slate-400">Prioridad</span><p className="text-sm font-semibold text-slate-700">{task.priority}</p></div>
         <div><span className="text-xs font-medium text-slate-400">Fase</span><p className="text-sm font-semibold text-slate-700">{task.phase} - {phaseMap[task.phase]}</p></div>
         <div><span className="text-xs font-medium text-slate-400">Esfuerzo</span><p className="text-sm font-semibold text-slate-700">{effortLabels[task.effort]}</p></div>
+        <div><span className="text-xs font-medium text-slate-400">Asignado a</span><p className="text-sm font-semibold text-slate-700">{task.assignedName || "—"}</p></div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {statuses.filter(s => s !== task.status).map(s => (
-          <button key={s} onClick={() => { onStatus(task.id, s); onClose(); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">→ {s}</button>
+      {availableStatuses.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {availableStatuses.map(s => (
+            <button key={s} onClick={() => { onStatus(task.id, s); onClose(); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">→ {s}</button>
+          ))}
+        </div>
+      )}
+      {isAdmin && (
+        <div className="flex gap-3 border-t border-slate-100 pt-4">
+          <button onClick={() => { onEdit(task); onClose(); }} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">✎ Editar</button>
+          <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">🗑️ Eliminar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function LoginForm() {
+  const { login, signup } = useAuth();
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+    setSubmitting(true);
+    try {
+      if (mode === "login") {
+        await login(email, password);
+      } else {
+        await signup(email, password, name);
+      }
+    } catch (err) {
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setError("Correo o contraseña incorrectos");
+      } else if (err.code === "auth/email-already-in-use") {
+        setError("Este correo ya está registrado");
+      } else if (err.code === "auth/weak-password") {
+        setError("La contraseña debe tener al menos 6 caracteres");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Correo electrónico inválido");
+      } else {
+        setError(err.message);
+      }
+    }
+    setSubmitting(false);
+  }
+
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] p-4">
+      <div className="w-full max-w-sm rounded-2xl border bg-white p-8 shadow-lg">
+        <div className="mb-6 text-center">
+          <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-lg font-bold text-white">N</span>
+          <h1 className="mt-3 text-lg font-bold text-slate-900">NoraHR Roadmap</h1>
+          <p className="text-sm text-slate-400">{mode === "login" ? "Inicia sesión para continuar" : "Crea tu cuenta"}</p>
+        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {mode === "signup" && (
+            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" required
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+          )}
+          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" type="email" required autoComplete="email"
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" type="password" required autoComplete={mode === "login" ? "current-password" : "new-password"}
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+          {error && <p className="text-xs text-red-500">{error}</p>}
+          <button type="submit" disabled={submitting}
+            className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
+            {submitting ? "..." : mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
+          </button>
+        </form>
+        <p className="mt-4 text-center text-xs text-slate-500">
+          {mode === "login" ? "¿No tienes cuenta? " : "¿Ya tienes cuenta? "}
+          <button type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
+            className="text-blue-600 hover:underline font-medium">
+            {mode === "login" ? "Crear cuenta" : "Iniciar sesión"}
+          </button>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function AdminPanel({ users, currentUser, onClose }) {
+  const { db: firestoreDb } = { db };
+  const [updating, setUpdating] = useState({});
+
+  async function toggleRole(uid, currentRole) {
+    setUpdating(p => ({ ...p, [uid]: true }));
+    try {
+      await updateDoc(doc(db, "users", uid), {
+        role: currentRole === "admin" ? "member" : "admin",
+      });
+    } catch (e) {
+      alert("Error al cambiar rol");
+    }
+    setUpdating(p => ({ ...p, [uid]: false }));
+  }
+
+  async function removeUser(uid, email) {
+    if (!confirm(`¿Eliminar a ${email} de la organización?`)) return;
+    try {
+      await deleteDoc(doc(db, "users", uid));
+    } catch (e) {
+      alert("Error al eliminar usuario");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-slate-900">⚙️ Administrar usuarios</h2>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
+      </div>
+      <p className="text-xs text-slate-400">El primer usuario registrado es admin automáticamente.</p>
+      <div className="space-y-2">
+        {users.map(u => (
+          <div key={u.id} className="flex items-center justify-between rounded-xl border border-slate-200 p-3">
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-semibold text-slate-900 truncate">{u.name || u.email}</p>
+              <p className="text-xs text-slate-400 truncate">{u.email}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0 ml-3">
+              <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${u.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}`}>{u.role}</span>
+              {u.id !== currentUser?.uid && (
+                <>
+                  <button onClick={() => toggleRole(u.id, u.role)} disabled={updating[u.id]}
+                    className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-40 transition-colors">
+                    {u.role === "admin" ? "Hacer member" : "Hacer admin"}
+                  </button>
+                  <button onClick={() => removeUser(u.id, u.email)}
+                    className="rounded-lg border border-red-200 px-2 py-1 text-[10px] font-medium text-red-600 hover:bg-red-50 transition-colors">
+                    Eliminar
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         ))}
-      </div>
-      <div className="flex gap-3 border-t border-slate-100 pt-4">
-        <button onClick={() => { onEdit(task); onClose(); }} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">✎ Editar</button>
-        <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">🗑️ Eliminar</button>
       </div>
     </div>
   );
 }
 
 export default function NoraHRKanban() {
-  const [tasks, setTasks] = useState(loadTasks);
-  const [query, setQuery] = useState("");
+  const { user, userData, loading, logout, isAdmin } = useAuth();
+  const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const [mod, setMod] = useState("Todos");
   const [prio, setPrio] = useState("Todas");
   const [phase, setPhase] = useState("Todas");
@@ -169,15 +323,53 @@ export default function NoraHRKanban() {
   const [editT, setEditT] = useState(null);
   const [detailT, setDetailT] = useState(null);
   const [collapsed, setCollapsed] = useState({});
-
-  useEffect(() => saveTasks(tasks), [tasks]);
+  const [showAdmin, setShowAdmin] = useState(false);
+  const seeded = useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
-  const filtered = useMemo(() => filterTasks(tasks, query, mod, prio, phase), [tasks, query, mod, prio, phase]);
+  useEffect(() => {
+    if (!user) return;
+    const q = collection(db, "tasks");
+    const unsub = onSnapshot(q, (snap) => {
+      const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setTasks(ts);
+      if (snap.empty && isAdmin && !seeded.current) {
+        seeded.current = true;
+        initialTasks.forEach(async (t) => {
+          const { id, ...data } = t;
+          await addDoc(collection(db, "tasks"), {
+            ...data,
+            assignedTo: "",
+            assignedName: "",
+            createdBy: user.uid,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        });
+      }
+    });
+    return unsub;
+  }, [user, isAdmin]);
+
+  useEffect(() => {
+    if (!user) return;
+    const unsub = onSnapshot(collection(db, "users"), (snap) => {
+      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return unsub;
+  }, [user]);
+
+  const userMap = useMemo(() => {
+    const m = {};
+    users.forEach(u => { m[u.id] = u; });
+    return m;
+  }, [users]);
+
+  const filtered = useMemo(() => filterTasks(tasks, searchQuery, mod, prio, phase), [tasks, searchQuery, mod, prio, phase]);
 
   const columns = useMemo(() => {
     const byCol = {};
@@ -187,60 +379,92 @@ export default function NoraHRKanban() {
   }, [filtered]);
 
   const done = tasks.filter(t => t.status === "Hecho").length;
-  const progress = Math.round((done / tasks.length) * 100);
+  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
   const effortDone = tasks.filter(t => t.status === "Hecho").reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
   const effortTotal = tasks.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
 
-  function handleDragEnd(e) {
+  async function handleDragEnd(e) {
     const { active, over } = e;
-    if (!over) return;
+    if (!over || !isAdmin) return;
 
-    const taskId = Number(active.id);
-    const task = tasks.find(t => t.id === taskId);
-    if (!task) return;
-
+    const taskId = String(active.id);
     const overStr = String(over.id);
+    let newStatus = null;
 
     if (overStr.startsWith("column-")) {
-      const targetStatus = overStr.replace("column-", "");
-      setTasks(ts => ts.map(t => t.id === taskId ? { ...t, status: targetStatus } : t));
-      return;
+      newStatus = overStr.replace("column-", "");
+    } else {
+      const overTask = tasks.find(t => t.id === overStr);
+      if (overTask && taskId !== overStr) {
+        if (overTask.status !== tasks.find(t => t.id === taskId)?.status) {
+          newStatus = overTask.status;
+        }
+      }
     }
 
-    const overTaskId = Number(over.id);
-    const overTask = tasks.find(t => t.id === overTaskId);
-    if (!overTask) return;
-
-    if (task.status !== overTask.status) {
-      setTasks(ts => ts.map(t => t.id === taskId ? { ...t, status: overTask.status } : t));
-      return;
-    }
-
-    if (active.id !== over.id) {
-      setTasks(ts => {
-        const sameStatus = ts.filter(t => t.status === task.status);
-        const oldIdx = sameStatus.findIndex(t => t.id === active.id);
-        const newIdx = sameStatus.findIndex(t => t.id === over.id);
-        if (oldIdx === -1 || newIdx === -1) return ts;
-
-        const reordered = [...sameStatus];
-        const [moved] = reordered.splice(oldIdx, 1);
-        reordered.splice(newIdx, 0, moved);
-
-        const others = ts.filter(t => t.status !== task.status);
-        return [...others, ...reordered];
-      });
+    if (newStatus) {
+      try {
+        await updateDoc(doc(db, "tasks", taskId), {
+          status: newStatus,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.error("Error updating task status:", e);
+      }
     }
   }
 
-  function updateStatus(id, s) { setTasks(ts => ts.map(t => t.id === id ? { ...t, status: s } : t)); }
-  function deleteTask(id) { setTasks(ts => ts.filter(t => t.id !== id)); }
-  function addTask(f) { setTasks(ts => [...ts, { ...f, status: "Pendiente" }]); setShowAdd(false); }
-  function editTask(f) { setTasks(ts => ts.map(t => t.id === f.id ? f : t)); setEditT(null); }
+  async function updateStatus(id, s) {
+    try {
+      await updateDoc(doc(db, "tasks", id), { status: s, updatedAt: serverTimestamp() });
+    } catch (e) {
+      console.error("Error updating status:", e);
+    }
+  }
+
+  async function deleteTask(id) {
+    try {
+      await deleteDoc(doc(db, "tasks", id));
+    } catch (e) {
+      console.error("Error deleting task:", e);
+    }
+  }
+
+  async function addTask(f) {
+    try {
+      await addDoc(collection(db, "tasks"), {
+        title: f.title,
+        module: f.module,
+        phase: f.phase,
+        priority: f.priority,
+        effort: f.effort,
+        description: f.description || "",
+        status: "Pendiente",
+        assignedTo: f.assignedTo || "",
+        assignedName: f.assignedName || "",
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      setShowAdd(false);
+    } catch (e) {
+      console.error("Error adding task:", e);
+    }
+  }
+
+  async function editTask(f) {
+    try {
+      const { id, ...data } = f;
+      await updateDoc(doc(db, "tasks", id), { ...data, updatedAt: serverTimestamp() });
+      setEditT(null);
+    } catch (e) {
+      console.error("Error editing task:", e);
+    }
+  }
 
   function exportCSV() {
-    const headers = "Título,Módulo,Fase,Prioridad,Esfuerzo,Estado\n";
-    const rows = tasks.map(t => `"${t.title}","${t.module}","${t.phase} - ${phaseMap[t.phase]}","${t.priority}","${t.effort}","${t.status}"`).join("\n");
+    const headers = "Título,Módulo,Fase,Prioridad,Esfuerzo,Estado,Asignado\n";
+    const rows = tasks.map(t => `"${t.title}","${t.module}","${t.phase} - ${phaseMap[t.phase]}","${t.priority}","${t.effort}","${t.status}","${t.assignedName || ""}"`).join("\n");
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "norahr-tasks.csv"; a.click();
   }
@@ -248,6 +472,19 @@ export default function NoraHRKanban() {
   function toggleCollapse(s) { setCollapsed(c => ({ ...c, [s]: !c[s] })); }
 
   const phasesOptions = ["Todas", ...Object.keys(phaseMap)];
+
+  if (loading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa]">
+        <div className="text-center">
+          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
+          <p className="mt-3 text-sm text-slate-400">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) return <LoginForm />;
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
@@ -262,15 +499,25 @@ export default function NoraHRKanban() {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <span className="hidden text-[11px] text-slate-400 md:block">
+                👤 {userData?.name || user.email}
+                <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
+              </span>
+              {isAdmin && (
+                <button onClick={() => setShowAdmin(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙️ Admin</button>
+              )}
               <button onClick={exportCSV} className="hidden rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors md:block">Export</button>
-              <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+ Nueva</button>
+              {isAdmin && (
+                <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-4 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+ Nueva</button>
+              )}
+              <button onClick={logout} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Salir</button>
             </div>
           </div>
         </header>
 
         <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5">
           <div className="mb-4 flex flex-wrap items-center gap-2">
-            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar..." className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-slate-400 transition-colors" />
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar..." className="min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-slate-400 transition-colors" />
             <select value={mod} onChange={e => setMod(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
               <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
@@ -329,8 +576,8 @@ export default function NoraHRKanban() {
                     <div className="p-3">
                       <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-2.5">
-                          {items.map(t => <SortableCard key={t.id} task={t} onSelect={setDetailT} />)}
-                          <ColumnPlaceholder status={status} />
+                          {items.map(t => <SortableCard key={t.id} task={t} onSelect={setDetailT} isAdmin={isAdmin} userMap={userMap} />)}
+                          {isAdmin && <ColumnPlaceholder status={status} />}
                         </div>
                       </SortableContext>
                     </div>
@@ -343,15 +590,19 @@ export default function NoraHRKanban() {
       </div>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)}>
-        <TaskForm onSave={addTask} onClose={() => setShowAdd(false)} />
+        <TaskForm onSave={addTask} onClose={() => setShowAdd(false)} users={users} />
       </Modal>
 
       <Modal open={!!editT} onClose={() => setEditT(null)}>
-        {editT && <TaskForm onSave={editTask} onClose={() => setEditT(null)} initial={editT} />}
+        {editT && <TaskForm onSave={editTask} onClose={() => setEditT(null)} initial={editT} users={users} />}
       </Modal>
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)}>
-        {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} />}
+        {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} isAdmin={isAdmin} />}
+      </Modal>
+
+      <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
+        <AdminPanel users={users} currentUser={user} onClose={() => setShowAdmin(false)} />
       </Modal>
     </DndContext>
   );
