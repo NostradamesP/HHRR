@@ -245,16 +245,16 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const isBlocked = task.status === "Bloqueado";
   const isCritical = task.urgency === "Crítica";
   return (
-    <div className="space-y-1">
+    <div className="space-y-1.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="flex min-w-0 flex-1 items-center gap-1.5 pr-7 text-[12px] font-semibold leading-snug text-slate-900">
+        <h3 className="flex min-w-0 flex-1 items-center gap-1.5 pr-7 text-[13px] font-semibold leading-snug text-slate-900">
           <PriorityIcon className={`inline-block h-3.5 w-3.5 shrink-0 ${meta.tone.split(" ")[0]}`} />
           <span className="truncate">{task.title}</span>
           {isBlocked && <Lock className="inline-block h-3 w-3 shrink-0 text-red-500" />}
         </h3>
       </div>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
           {isAdmin ? (
             <select value={task.module} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { module: e.target.value }); }}
               onClick={e => e.stopPropagation()}
@@ -315,7 +315,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
   return (
     <div ref={setNodeRef} style={s} {...listeners}
       onClick={(deleteMode ? undefined : () => onSelect(task))}
-      className={`group relative rounded-lg border border-slate-200/80 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
+      className={`group relative rounded-lg border border-slate-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
       {isAdmin && !deleteMode && (
         <button
           type="button"
