@@ -88,14 +88,22 @@ function ColumnPlaceholder({ status }) {
   return <div ref={setNodeRef} className={`min-h-[60px] rounded-xl border-2 border-dashed p-3 text-center text-sm transition-colors ${isOver ? "border-blue-400 bg-blue-50" : "border-slate-200 text-slate-300"}`}>Suelta aquí</div>;
 }
 
-function SortableCard({ task, onSelect, isAdmin, userMap }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin });
+function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   return (
-    <div ref={setNodeRef} style={s} {...(isAdmin ? { ...attributes, ...listeners } : {})}
-      onClick={() => onSelect(task)}
-      className={`group rounded-xl border bg-white p-2.5 md:p-3 shadow-sm transition-all ${isAdmin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+    <div ref={setNodeRef} style={s} {...((isAdmin && !deleteMode) ? { ...attributes, ...listeners } : {})}
+      onClick={(deleteMode ? undefined : () => onSelect(task))}
+      className={`group relative rounded-xl border bg-white p-2.5 md:p-3 shadow-sm transition-all ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+      {deleteMode && isAdmin && (
+        <button
+          onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); } }}
+          className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white shadow hover:bg-red-600 transition-colors"
+        >
+          ✕
+        </button>
+      )}
       <div className="mb-2 flex items-center justify-between gap-2">
         <div className="flex items-center gap-1.5 min-w-0">
           <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${priorityColor(task.priority)}`} />
@@ -477,6 +485,7 @@ export default function NoraHRKanban() {
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [deleteMode, setDeleteMode] = useState(false);
   const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(boards);
@@ -787,9 +796,6 @@ export default function NoraHRKanban() {
                 <button onClick={exportCSV} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">Export</button>
                 <button onClick={logout} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Salir</button>
               </div>
-              {isAdmin && (
-                <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+ Nueva</button>
-              )}
               <div className="relative md:hidden">
                 <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">☰</button>
                 {showMobileMenu && (
@@ -834,6 +840,12 @@ export default function NoraHRKanban() {
               <select value={phase} onChange={e => setPhase(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
                 {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
               </select>
+              {isAdmin && (
+                <>
+                  <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+</button>
+                  <button onClick={() => setDeleteMode(!deleteMode)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${deleteMode ? "bg-red-500 text-white border-red-500" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>🗑️</button>
+                </>
+              )}
             </div>
           </div>
 
@@ -884,7 +896,7 @@ export default function NoraHRKanban() {
                     <div className="p-3">
                       <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
                         <div className="space-y-2.5">
-                          {items.map(t => <SortableCard key={t.id} task={t} onSelect={setDetailT} isAdmin={isAdmin} userMap={userMap} />)}
+                          {items.map(t => <SortableCard key={t.id} task={t} onSelect={setDetailT} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={deleteTask} />)}
                           {isAdmin && <ColumnPlaceholder status={status} />}
                         </div>
                       </SortableContext>
