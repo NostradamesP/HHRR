@@ -2,9 +2,11 @@ import React, { useMemo, useState, useEffect, useCallback, useRef } from "react"
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, useDraggable } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { collection, onSnapshot, orderBy, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, orderBy, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
+import { useBoard } from "./BoardContext";
+import Sidebar from "./Sidebar";
 
 const initialTasks = [
   { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es NoraHR, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", effort: "Medio" },
@@ -313,6 +315,7 @@ function AdminPanel({ users, currentUser, onClose }) {
 
 export default function NoraHRKanban() {
   const { user, userData, loading, logout, isAdmin } = useAuth();
+  const { activeBoardId, boards } = useBoard();
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -324,7 +327,11 @@ export default function NoraHRKanban() {
   const [detailT, setDetailT] = useState(null);
   const [collapsed, setCollapsed] = useState({});
   const [showAdmin, setShowAdmin] = useState(false);
-  const seeded = useRef(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const seeded = useRef({});
+  const migrated = useRef(false);
+  const boardsRef = useRef(boards);
+  boardsRef.current = boards;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -332,28 +339,31 @@ export default function NoraHRKanban() {
   );
 
   useEffect(() => {
-    if (!user) return;
-    const q = collection(db, "tasks");
+    if (!user || !activeBoardId) return;
+    const q = collection(db, "boards", activeBoardId, "tasks");
     const unsub = onSnapshot(q, (snap) => {
       const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTasks(ts);
-      if (snap.empty && isAdmin && !seeded.current) {
-        seeded.current = true;
-        initialTasks.forEach(async (t) => {
-          const { id, ...data } = t;
-          await addDoc(collection(db, "tasks"), {
-            ...data,
-            assignedTo: "",
-            assignedName: "",
-            createdBy: user.uid,
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
+      if (snap.empty && isAdmin && !seeded.current[activeBoardId]) {
+        seeded.current[activeBoardId] = true;
+        const board = boardsRef.current.find(b => b.id === activeBoardId);
+        if (board && board.name === "NoraHR Roadmap") {
+          initialTasks.forEach(async (t) => {
+            const { id, ...data } = t;
+            await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
+              ...data,
+              assignedTo: "",
+              assignedName: "",
+              createdBy: user.uid,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
           });
-        });
+        }
       }
     });
     return unsub;
-  }, [user, isAdmin]);
+  }, [user, isAdmin, activeBoardId]);
 
   useEffect(() => {
     if (!user) return;
@@ -362,6 +372,22 @@ export default function NoraHRKanban() {
     });
     return unsub;
   }, [user]);
+
+  useEffect(() => {
+    if (!user || !isAdmin || !activeBoardId || migrated.current) return;
+    migrated.current = true;
+    getDocs(collection(db, "tasks")).then(async (snap) => {
+      if (snap.empty) return;
+      const writes = snap.docs.map(d =>
+        setDoc(doc(db, "boards", activeBoardId, "tasks", d.id), {
+          ...d.data(),
+          updatedAt: serverTimestamp(),
+        })
+      );
+      await Promise.all(writes);
+      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "tasks", d.id))));
+    });
+  }, [user, isAdmin, activeBoardId]);
 
   const userMap = useMemo(() => {
     const m = {};
@@ -404,7 +430,7 @@ export default function NoraHRKanban() {
 
     if (newStatus) {
       try {
-        await updateDoc(doc(db, "tasks", taskId), {
+        await updateDoc(doc(db, "boards", activeBoardId, "tasks", taskId), {
           status: newStatus,
           updatedAt: serverTimestamp(),
         });
@@ -416,7 +442,7 @@ export default function NoraHRKanban() {
 
   async function updateStatus(id, s) {
     try {
-      await updateDoc(doc(db, "tasks", id), { status: s, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { status: s, updatedAt: serverTimestamp() });
     } catch (e) {
       console.error("Error updating status:", e);
     }
@@ -424,7 +450,7 @@ export default function NoraHRKanban() {
 
   async function deleteTask(id) {
     try {
-      await deleteDoc(doc(db, "tasks", id));
+      await deleteDoc(doc(db, "boards", activeBoardId, "tasks", id));
     } catch (e) {
       console.error("Error deleting task:", e);
     }
@@ -432,7 +458,7 @@ export default function NoraHRKanban() {
 
   async function addTask(f) {
     try {
-      await addDoc(collection(db, "tasks"), {
+      await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
         title: f.title,
         module: f.module,
         phase: f.phase,
@@ -455,7 +481,7 @@ export default function NoraHRKanban() {
   async function editTask(f) {
     try {
       const { id, ...data } = f;
-      await updateDoc(doc(db, "tasks", id), { ...data, updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { ...data, updatedAt: serverTimestamp() });
       setEditT(null);
     } catch (e) {
       console.error("Error editing task:", e);
@@ -470,6 +496,11 @@ export default function NoraHRKanban() {
   }
 
   function toggleCollapse(s) { setCollapsed(c => ({ ...c, [s]: !c[s] })); }
+
+  const activeBoardName = useMemo(() => {
+    const b = boards.find(b => b.id === activeBoardId);
+    return b ? b.name : "NoraHR Roadmap";
+  }, [boards, activeBoardId]);
 
   const phasesOptions = ["Todas", ...Object.keys(phaseMap)];
 
@@ -494,11 +525,12 @@ export default function NoraHRKanban() {
             <div className="flex items-center gap-3">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">N</span>
               <div>
-                <h1 className="text-sm font-bold text-slate-900">NoraHR Roadmap</h1>
+                <h1 className="text-sm font-bold text-slate-900">{activeBoardName}</h1>
                 <p className="text-[11px] text-slate-400">{tasks.length} tareas · {progress}% · {Math.round((effortDone / effortTotal) * 100)}% esfuerzo</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <button onClick={() => setSidebarOpen(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">📋 Boards</button>
               <span className="hidden text-[11px] text-slate-400 md:block">
                 👤 {userData?.name || user.email}
                 <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
@@ -604,6 +636,8 @@ export default function NoraHRKanban() {
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
         <AdminPanel users={users} currentUser={user} onClose={() => setShowAdmin(false)} />
       </Modal>
+
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
     </DndContext>
   );
 }
