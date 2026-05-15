@@ -242,63 +242,52 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const meta = priorityMeta[task.priority] || priorityMeta.Media;
   const PriorityIcon = meta.icon;
   const checklist = checklistProgress(task);
-  const overdue = task.dueDate && new Date(task.dueDate) < new Date();
   const isBlocked = task.status === "Bloqueado";
   const isCritical = task.urgency === "Crítica";
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 flex-1 pr-7 text-[12px] font-semibold leading-snug text-slate-900">
-          {task.title}
-          {isBlocked && <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700"><Lock className="h-3 w-3" />Bloqueado</span>}
+        <h3 className="flex min-w-0 flex-1 items-center gap-1.5 pr-7 text-[12px] font-semibold leading-snug text-slate-900">
+          <PriorityIcon className={`inline-block h-3.5 w-3.5 shrink-0 ${meta.tone.split(" ")[0]}`} />
+          <span className="truncate">{task.title}</span>
+          {isBlocked && <Lock className="inline-block h-3 w-3 shrink-0 text-red-500" />}
         </h3>
       </div>
-      {task.description && <p className="line-clamp-1 text-[10px] leading-4 text-slate-500">{task.description}</p>}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {task.system && <FieldPill icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system}</FieldPill>}
-        {task.ticketType && <FieldPill className="border-slate-200 bg-slate-50 text-slate-600">{task.ticketType}</FieldPill>}
-        <FieldPill icon={Tag} className={`${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
-          {task.module}
-        </FieldPill>
-        <FieldPill className={`${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
-          {task.phase}
-        </FieldPill>
-        <FieldPill icon={PriorityIcon} className={`${meta.tone}`}>
-          {meta.label}
-        </FieldPill>
-        {isCritical && <FieldPill icon={Flame} className="border-red-200 bg-red-50 text-red-700">Crítica</FieldPill>}
-      </div>
       <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400">
-          <Gauge className="h-3.5 w-3.5" />
-          <span>{task.effort}</span>
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1">
+          {isAdmin ? (
+            <select value={task.module} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { module: e.target.value }); }}
+              onClick={e => e.stopPropagation()}
+              className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium outline-none ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+              {modules.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          ) : (
+            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+              <Tag className="h-3 w-3" />{task.module}
+            </span>
+          )}
+          {isAdmin ? (
+            <select value={task.phase} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { phase: e.target.value }); }}
+              onClick={e => e.stopPropagation()}
+              className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium outline-none ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
+              {Object.entries(phaseMap).map(([k]) => <option key={k} value={k}>{k}</option>)}
+            </select>
+          ) : (
+            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
+              {task.phase}
+            </span>
+          )}
           {checklist.total > 0 && (
-            <span className="inline-flex items-center gap-1 text-slate-500">
-              <CheckCircle2 className="h-3.5 w-3.5" />
+            <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
+              <CheckCircle2 className="h-3 w-3" />
               {checklist.done}/{checklist.total}
             </span>
           )}
-          {isAdmin && (
-            <button onClick={(e) => { e.stopPropagation(); const t = prompt("Nuevo item de checklist"); if (t?.trim()) onTaskPatch?.(task.id, { checklist: [...(task.checklist || []), { id: `check-${Date.now()}`, text: t.trim(), done: false }] }); }}
-              className="inline-flex h-4 w-4 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Agregar item">
-              <Plus className="h-3 w-3" />
-            </button>
-          )}
-          {task.slaHours && <span>SLA {task.slaHours}h</span>}
           {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center">
           {task.assignedName ? (
-            <>
-              <Avatar name={task.assignedName} />
-              <div className="min-w-0 max-w-[100px]">
-                <p className="truncate text-[10px] font-medium text-slate-600">{task.assignedName}</p>
-                {(() => {
-                  const u = (users || []).find(uu => uu.name === task.assignedName || uu.id === task.assignedTo);
-                  return u?.jobTitle ? <p className="truncate text-[8px] text-slate-400">{u.jobTitle}</p> : null;
-                })()}
-              </div>
-            </>
+            <Avatar name={task.assignedName} />
           ) : (
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-300">
               <User className="h-3 w-3" />
