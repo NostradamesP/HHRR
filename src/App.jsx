@@ -448,63 +448,43 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
         <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900"><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select>
       </div>
       <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
-      {isLocal && (
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
-          <h3 className="text-xs font-black uppercase text-slate-400">Campos IT</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <select value={f.system || ""} onChange={e => setF({ ...f, system: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
-              {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <select value={f.ticketType || ""} onChange={e => setF({ ...f, ticketType: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
-              {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
-            </select>
-            <input value={f.requester || ""} onChange={e => setF({ ...f, requester: e.target.value })} placeholder="Solicitante" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
-            <input value={f.slaHours || ""} onChange={e => setF({ ...f, slaHours: Number(e.target.value) || "" })} type="number" min="1" placeholder="SLA horas" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
-            <select value={f.assignedName || ""} onChange={e => setF({ ...f, assignedTo: e.target.value ? `local-${e.target.value}` : "", assignedName: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
-              <option value="">Sin asignar</option>
-              {itConfig.team.map(v => <option key={v} value={v}>Asignar: {v}</option>)}
-            </select>
-            <select value={f.impact || ""} onChange={e => setF({ ...f, impact: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
-              {itConfig.impacts.map(v => <option key={v} value={v}>Impacto: {v}</option>)}
-            </select>
-            <select value={f.urgency || ""} onChange={e => setF({ ...f, urgency: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
-              {itConfig.urgencies.map(v => <option key={v} value={v}>Urgencia: {v}</option>)}
-            </select>
+      <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+        <h3 className="text-xs font-black uppercase text-slate-400">Campos IT</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <select value={f.system || ""} onChange={e => setF({ ...f, system: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+            {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <select value={f.ticketType || ""} onChange={e => setF({ ...f, ticketType: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+            {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
+          </select>
+          <input value={f.requester || ""} onChange={e => setF({ ...f, requester: e.target.value })} placeholder="Solicitante" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
+          <input value={f.slaHours || ""} onChange={e => setF({ ...f, slaHours: Number(e.target.value) || "" })} type="number" min="1" placeholder="SLA horas" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
+          <select value={f.assignedName || ""} onChange={e => setF({ ...f, assignedTo: e.target.value ? `local-${e.target.value}` : "", assignedName: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+            <option value="">Sin asignar</option>
+            {itConfig.team.map(v => <option key={v} value={v}>Asignar: {v}</option>)}
+          </select>
+          <select value={f.impact || ""} onChange={e => setF({ ...f, impact: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+            {itConfig.impacts.map(v => <option key={v} value={v}>Impacto: {v}</option>)}
+          </select>
+          <select value={f.urgency || ""} onChange={e => setF({ ...f, urgency: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+            {itConfig.urgencies.map(v => <option key={v} value={v}>Urgencia: {v}</option>)}
+          </select>
+        </div>
+        <div className="space-y-2">
+          <h4 className="text-xs font-black uppercase text-slate-400">Checklist</h4>
+          {(f.checklist || []).map(item => (
+            <div key={item.id} className="flex items-center gap-2">
+              <input type="checkbox" checked={!!item.done} onChange={e => updateChecklistItem(item.id, { done: e.target.checked })} />
+              <input value={item.text} onChange={e => updateChecklistItem(item.id, { text: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400" />
+              <button type="button" onClick={() => removeChecklistItem(item.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
+            </div>
+          ))}
+          <div className="flex gap-2">
+            <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCheckItem(); } }} placeholder="Agregar item de checklist" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400" />
+            <button type="button" onClick={addCheckItem} className="rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white">Agregar</button>
           </div>
-          <div className="space-y-2">
-            <h4 className="text-xs font-black uppercase text-slate-400">Checklist</h4>
-            {(f.checklist || []).map(item => (
-              <div key={item.id} className="flex items-center gap-2">
-                <input type="checkbox" checked={!!item.done} onChange={e => updateChecklistItem(item.id, { done: e.target.checked })} />
-                <input value={item.text} onChange={e => updateChecklistItem(item.id, { text: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400" />
-                <button type="button" onClick={() => removeChecklistItem(item.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
-              </div>
-            ))}
-            <div className="flex gap-2">
-              <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCheckItem(); } }} placeholder="Agregar item de checklist" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400" />
-              <button type="button" onClick={addCheckItem} className="rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white">Agregar</button>
         </div>
       </div>
-      {isAdmin && Array.isArray(task.checklist) && task.checklist.length > 0 && (
-        <div className="space-y-0.5 border-t border-slate-100 pt-1">
-          {task.checklist.slice(0, 3).map(item => (
-            <button key={item.id}
-              onClick={(e) => { e.stopPropagation(); onTaskPatch?.(task.id, { checklist: (task.checklist || []).map(i => i.id === item.id ? { ...i, done: !i.done } : i) }); }}
-              className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[10px] transition-colors hover:bg-slate-50"
-            >
-              <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300"}`}>
-                {item.done && <CheckCircle2 className="h-2.5 w-2.5" />}
-              </span>
-              <span className={`truncate ${item.done ? "text-slate-400 line-through" : "text-slate-600"}`}>{item.text}</span>
-            </button>
-          ))}
-          {task.checklist.length > 3 && (
-            <p className="px-1 text-[10px] text-slate-400">+{task.checklist.length - 3} más</p>
-          )}
-        </div>
-      )}
-    </div>
-      )}
       {isAdmin && users.length > 0 && (
         <select value={f.assignedTo} onChange={e => {
           const u = users.find(u => u.id === e.target.value);
@@ -718,7 +698,7 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <FieldPill icon={PriorityIcon} className={priority.tone}>{task.priority}</FieldPill>
-                  {isLocal ? (
+                  {isAdmin ? (
                     <>
                       <select value={task.system || ""} onChange={e => onTaskPatch?.(task.id, { system: e.target.value })}
                         className="rounded-md border border-cyan-100 bg-cyan-50 px-2 py-1 text-[10px] font-medium text-cyan-700 outline-none">
@@ -740,7 +720,7 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                   <FieldPill icon={Gauge} className="border-slate-200 bg-slate-50 text-slate-600">{task.effort}</FieldPill>
                 </div>
                 <div className="grid gap-3 md:grid-cols-4">
-                  {isLocal ? (
+                  {isAdmin ? (
                     <>
                       <InlineField label="Solicitante">
                         <input value={task.requester || ""} onChange={e => onTaskPatch?.(task.id, { requester: e.target.value })}
@@ -846,11 +826,11 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                     <h3 className="text-sm font-bold text-slate-900">Checklist</h3>
                     <p className="text-xs text-slate-400">{checklist.done}/{checklist.total} completado</p>
                   </div>
-                  {isLocal && <button onClick={addChecklistItem} className="flex h-8 items-center gap-1 rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white"><Plus className="h-3.5 w-3.5" />Item</button>}
+                  {isAdmin && <button onClick={addChecklistItem} className="flex h-8 items-center gap-1 rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white"><Plus className="h-3.5 w-3.5" />Item</button>}
                 </div>
                 <div className="space-y-2 p-5">
                   {(task.checklist || []).map(item => (
-                    <button key={item.id} onClick={() => isLocal && toggleCheckItem(item.id)} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50">
+                    <button key={item.id} onClick={() => isAdmin && toggleCheckItem(item.id)} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50">
                       <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>
                         <CheckCircle2 className="h-3.5 w-3.5" />
                       </span>
@@ -1341,6 +1321,13 @@ export default function NoraHRKanban() {
                     archived: false,
                     assignedTo: "",
                     assignedName: "",
+                    ticketType: "",
+                    requester: "Operaciones IT",
+                    system: "",
+                    impact: "Medio",
+                    urgency: "Media",
+                    slaHours: 72,
+                    checklist: makeChecklist(data.title),
                     createdBy: user.uid,
                     createdAt: serverTimestamp(),
                     updatedAt: serverTimestamp(),
@@ -1621,6 +1608,13 @@ export default function NoraHRKanban() {
         archived: false,
         assignedTo: f.assignedTo || "",
         assignedName: f.assignedName || "",
+        ticketType: f.ticketType || "",
+        requester: f.requester || "",
+        system: f.system || "",
+        impact: f.impact || "",
+        urgency: f.urgency || "",
+        slaHours: f.slaHours || "",
+        checklist: f.checklist || makeChecklist(f.title),
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
