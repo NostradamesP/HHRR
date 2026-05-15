@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { MessageSquare, Send } from "lucide-react";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
@@ -46,16 +47,19 @@ export default function ChatPanel() {
   }
 
   return (
-    <div className="border-t border-slate-200 flex flex-col" style={{ minHeight: 0 }}>
-      <div className="flex items-center justify-between px-3 py-2 shrink-0">
-        <h3 className="text-[11px] font-semibold text-slate-500 uppercase tracking-wider">Chat del board</h3>
-        <span className="text-[10px] text-slate-400">{messages.length}</span>
+    <div className="flex min-h-0 flex-col border-t border-slate-200 bg-white">
+      <div className="flex shrink-0 items-center justify-between px-3 py-2">
+        <h3 className="flex items-center gap-2 text-[11px] font-black uppercase tracking-wide text-slate-500">
+          <MessageSquare className="h-3.5 w-3.5 text-cyan-500" />
+          Chat del board
+        </h3>
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">{messages.length}</span>
       </div>
-      <div className="flex-1 overflow-y-auto px-3 space-y-2 min-h-0" style={{ maxHeight: "180px" }}>
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3" style={{ maxHeight: "190px" }}>
         {messages.map(m => (
-          <div key={m.id} className="text-xs">
+          <div key={m.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs">
             <div className="flex items-baseline gap-1.5">
-              <span className="font-semibold text-slate-700 truncate max-w-[100px]">{m.userName}</span>
+              <span className="max-w-[140px] truncate font-bold text-slate-700">{m.userName}</span>
               <span className="text-[10px] text-slate-400 shrink-0">{formatTime(m.createdAt)}</span>
             </div>
             <p className="text-slate-600 break-words leading-relaxed">{m.text}</p>
@@ -63,19 +67,19 @@ export default function ChatPanel() {
         ))}
         <div ref={bottomRef} />
       </div>
-      <form onSubmit={sendMessage} className="flex gap-1.5 border-t border-slate-100 p-2 shrink-0">
+      <form onSubmit={sendMessage} className="flex shrink-0 gap-1.5 border-t border-slate-100 p-2">
         <input
           value={text}
           onChange={e => setText(e.target.value)}
           placeholder="Escribe un mensaje..."
-          className="flex-1 rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] outline-none focus:border-slate-400 focus:bg-white transition-colors"
+          className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] outline-none transition-colors focus:border-cyan-300 focus:bg-white"
         />
         <button
           type="submit"
           disabled={!text.trim()}
-          className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors"
+          className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-600 text-white transition-colors hover:bg-cyan-700 disabled:bg-slate-200"
         >
-          →
+          <Send className="h-3.5 w-3.5" />
         </button>
       </form>
     </div>

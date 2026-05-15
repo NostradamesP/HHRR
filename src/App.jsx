@@ -3,6 +3,35 @@ import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, us
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  Archive,
+  Calendar,
+  CheckCircle2,
+  ChevronDown,
+  ChevronRight,
+  Circle,
+  Clock3,
+  Flag,
+  Flame,
+  Gauge,
+  LayoutDashboard,
+  ListFilter,
+  Loader2,
+  Lock,
+  MessageSquare,
+  MoreVertical,
+  Pencil,
+  Plus,
+  Search,
+  Send,
+  Settings,
+  SlidersHorizontal,
+  Tag,
+  Trash2,
+  User,
+  Users,
+  X,
+} from "lucide-react";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
@@ -63,9 +92,9 @@ const statuses = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
 
 const phaseMap = { V1: "Fundación", V2: "Auth y empresas", V3: "RRHH Self-Service", V4: "Documentos", V5: "Dashboard Admin", V6: "Payroll Lite", V7: "Cumplimiento RD", V8: "BI + IA" };
 
-const phaseColors = { V1: "bg-blue-100 text-blue-700 border-blue-200", V2: "bg-purple-100 text-purple-700 border-purple-200", V3: "bg-green-100 text-green-700 border-green-200", V4: "bg-amber-100 text-amber-700 border-amber-200", V5: "bg-rose-100 text-rose-700 border-rose-200", V6: "bg-cyan-100 text-cyan-700 border-cyan-200", V7: "bg-orange-100 text-orange-700 border-orange-200", V8: "bg-indigo-100 text-indigo-700 border-indigo-200" };
+const phaseColors = { V1: "bg-blue-100 text-blue-700 border-blue-200", V2: "bg-cyan-100 text-cyan-700 border-cyan-200", V3: "bg-green-100 text-green-700 border-green-200", V4: "bg-amber-100 text-amber-700 border-amber-200", V5: "bg-rose-100 text-rose-700 border-rose-200", V6: "bg-cyan-100 text-cyan-700 border-cyan-200", V7: "bg-orange-100 text-orange-700 border-orange-200", V8: "bg-blue-100 text-blue-700 border-blue-200" };
 
-const modColors = { Producto: "bg-sky-100 text-sky-700", Arquitectura: "bg-violet-100 text-violet-700", Seguridad: "bg-red-100 text-red-700", Infraestructura: "bg-slate-100 text-slate-700", Diseño: "bg-pink-100 text-pink-700", Auth: "bg-blue-100 text-blue-700", Empresas: "bg-teal-100 text-teal-700", Auditoría: "bg-yellow-100 text-yellow-700", Empleados: "bg-green-100 text-green-700", Flutter: "bg-cyan-100 text-cyan-700", Solicitudes: "bg-orange-100 text-orange-700", Documentos: "bg-amber-100 text-amber-700", Reportes: "bg-rose-100 text-rose-700", Notificaciones: "bg-fuchsia-100 text-fuchsia-700", Nómina: "bg-emerald-100 text-emerald-700", "Compliance RD": "bg-red-100 text-red-700", BI: "bg-indigo-100 text-indigo-700", IA: "bg-violet-100 text-violet-700" };
+const modColors = { Producto: "bg-sky-100 text-sky-700", Arquitectura: "bg-cyan-100 text-cyan-700", Seguridad: "bg-red-100 text-red-700", Infraestructura: "bg-slate-100 text-slate-700", Diseño: "bg-pink-100 text-pink-700", Auth: "bg-blue-100 text-blue-700", Empresas: "bg-teal-100 text-teal-700", Auditoría: "bg-yellow-100 text-yellow-700", Empleados: "bg-green-100 text-green-700", Flutter: "bg-cyan-100 text-cyan-700", Solicitudes: "bg-orange-100 text-orange-700", Documentos: "bg-amber-100 text-amber-700", Reportes: "bg-rose-100 text-rose-700", Notificaciones: "bg-sky-100 text-sky-700", Nómina: "bg-emerald-100 text-emerald-700", "Compliance RD": "bg-red-100 text-red-700", BI: "bg-blue-100 text-blue-700", IA: "bg-cyan-100 text-cyan-700" };
 
 const modules = Object.keys(modColors);
 
@@ -79,45 +108,84 @@ function filterTasks(tasks, q, mod, prio, ph) {
   });
 }
 
-const effortLabels = { Alto: "🔥 Alto", Medio: "⚡ Medio", Bajo: "💤 Bajo" };
+const priorityMeta = {
+  Alta: { label: "Alta", icon: Flame, tone: "text-red-600 bg-red-50 border-red-100" },
+  Media: { label: "Media", icon: Flag, tone: "text-amber-600 bg-amber-50 border-amber-100" },
+  Baja: { label: "Baja", icon: Circle, tone: "text-slate-500 bg-slate-50 border-slate-100" },
+};
 
-function priorityColor(p) { return p === "Alta" ? "bg-red-500" : p === "Media" ? "bg-amber-500" : "bg-slate-400"; }
+const statusMeta = {
+  Pendiente: { icon: Circle, tone: "text-slate-600", soft: "bg-slate-100 text-slate-700 border-slate-200", accent: "bg-slate-400" },
+  "En progreso": { icon: Loader2, tone: "text-blue-600", soft: "bg-blue-50 text-blue-700 border-blue-100", accent: "bg-blue-500" },
+  Bloqueado: { icon: Lock, tone: "text-rose-600", soft: "bg-rose-50 text-rose-700 border-rose-100", accent: "bg-rose-500" },
+  Hecho: { icon: CheckCircle2, tone: "text-emerald-600", soft: "bg-emerald-50 text-emerald-700 border-emerald-100", accent: "bg-emerald-500" },
+};
+
+const tabClass = (active) =>
+  `flex h-8 items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors ${
+    active ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
+  }`;
+
+function Avatar({ name, size = "sm" }) {
+  const dim = size === "lg" ? "h-11 w-11 text-base" : "h-7 w-7 text-xs";
+  return (
+    <span className={`inline-flex ${dim} shrink-0 items-center justify-center rounded-full bg-cyan-600 font-bold text-white shadow-sm`}>
+      {(name || "?").charAt(0).toUpperCase()}
+    </span>
+  );
+}
+
+function FieldPill({ icon: Icon, children, className = "" }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-medium ${className}`}>
+      {Icon && <Icon className="h-3.5 w-3.5" />}
+      {children}
+    </span>
+  );
+}
 
 function DroppableZone({ status }) {
   const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
   return (
-    <div ref={setNodeRef} className={`min-h-[40px] rounded-lg border-2 border-dashed transition-colors ${isOver ? "border-blue-400 bg-blue-50" : "border-transparent"}`} />
+    <div ref={setNodeRef} className={`min-h-[42px] rounded-lg border border-dashed transition-colors ${isOver ? "border-cyan-300 bg-cyan-50" : "border-transparent"}`} />
   );
 }
 
 function CardContent({ task }) {
+  const meta = priorityMeta[task.priority] || priorityMeta.Media;
+  const PriorityIcon = meta.icon;
   return (
-    <>
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1.5 min-w-0">
-          <span className={`inline-block h-2.5 w-2.5 shrink-0 rounded-full ${priorityColor(task.priority)}`} />
-          <span className={`truncate rounded-md px-2 py-0.5 text-[10px] font-semibold ${modColors[task.module] || "bg-slate-100 text-slate-600"}`}>{task.module}</span>
+    <div className="space-y-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <h3 className="min-w-0 flex-1 pr-7 text-[13px] font-semibold leading-snug text-slate-900">{task.title}</h3>
+      </div>
+      {task.description && <p className="line-clamp-2 text-[10px] leading-5 text-slate-500">{task.description}</p>}
+      <div className="flex flex-wrap items-center gap-1.5">
+        <FieldPill icon={Tag} className={`${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+          {task.module}
+        </FieldPill>
+        <FieldPill className={`${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
+          {task.phase}
+        </FieldPill>
+        <FieldPill icon={PriorityIcon} className={`${meta.tone}`}>
+          {meta.label}
+        </FieldPill>
+      </div>
+      <div className="flex items-center justify-between gap-2 pt-1">
+        <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400">
+          <Gauge className="h-3.5 w-3.5" />
+          <span>{task.effort}</span>
+          {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         </div>
-        <span className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase}</span>
-      </div>
-      <h3 className="text-sm font-semibold leading-snug text-slate-900">{task.title}</h3>
-      <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
-        <span>{effortLabels[task.effort]}</span>
-        <span className="text-slate-300">·</span>
-        <span className="truncate">{task.description}</span>
-      </div>
-      {task.assignedName && (
-        <div className="mt-1.5 flex items-center gap-1.5">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600 shrink-0">
-            {task.assignedName.charAt(0).toUpperCase()}
+        {task.assignedName ? (
+          <Avatar name={task.assignedName} />
+        ) : (
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-300">
+            <User className="h-3.5 w-3.5" />
           </span>
-          <span className="text-[11px] text-slate-500 truncate">{task.assignedName}</span>
-        </div>
-      )}
-      {task.dueDate && (
-        <DueDateBadge dueDate={task.dueDate} />
-      )}
-    </>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -126,15 +194,27 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   return (
-    <div ref={setNodeRef} style={s} {...((isAdmin && !deleteMode) ? { ...attributes, ...listeners } : {})}
+    <div ref={setNodeRef} style={s}
       onClick={(deleteMode ? undefined : () => onSelect(task))}
-      className={`group relative rounded-xl border bg-white p-2.5 md:p-3 shadow-sm transition-all ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "shadow-lg ring-2 ring-blue-400 z-50 rotate-2 scale-105" : "hover:shadow-md hover:-translate-y-0.5"}`}>
+      className={`group relative rounded-lg border border-slate-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
+      {isAdmin && !deleteMode && (
+        <button
+          type="button"
+          aria-label="Arrastrar tarea"
+          onClick={(e) => e.stopPropagation()}
+          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+          {...attributes}
+          {...listeners}
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      )}
       {deleteMode && isAdmin && (
         <button
           onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); } }}
-          className="absolute -right-1.5 -top-1.5 z-10 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white shadow hover:bg-red-600 transition-colors"
+          className="absolute -right-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 transition-colors"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       )}
       <CardContent task={task} />
@@ -142,50 +222,51 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }
   );
 }
 
-function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap }) {
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd }) {
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
   const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
 
-  const colAccents = {
-    Pendiente: { head: "bg-slate-100 text-slate-600", count: "bg-slate-200 text-slate-600", border: "border-slate-200", bar: "bg-slate-300" },
-    "En progreso": { head: "bg-blue-100 text-blue-600", count: "bg-blue-200 text-blue-600", border: "border-blue-200", bar: "bg-blue-500" },
-    Bloqueado: { head: "bg-rose-100 text-rose-600", count: "bg-rose-200 text-rose-600", border: "border-rose-200", bar: "bg-rose-500" },
-    Hecho: { head: "bg-emerald-100 text-emerald-600", count: "bg-emerald-200 text-emerald-600", border: "border-emerald-200", bar: "bg-emerald-500" },
-  }[status];
-
-  const icons = { Pendiente: "○", "En progreso": "⏳", Bloqueado: "⚠️", Hecho: "✅" };
+  const colAccents = statusMeta[status] || statusMeta.Pendiente;
+  const StatusIcon = colAccents.icon;
 
   return (
-    <div className={`min-w-[280px] snap-start md:min-w-0 rounded-xl border bg-white shadow-sm ${colAccents.border}`}>
-      <div className={`flex items-center justify-between rounded-t-xl px-4 py-2.5 ${colAccents.head}`}>
+    <div className="min-w-[292px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm md:min-w-0">
+      <div className="flex items-center justify-between px-3 py-3">
         <div className="flex items-center gap-2">
-          <button onClick={() => toggleCollapse(status)} className="text-xs opacity-60 hover:opacity-100">{collapsed[status] ? "▶" : "▼"}</button>
-          <span className="text-sm">{icons[status]}</span>
-          <h2 className="text-sm font-semibold">{status}</h2>
+          <button onClick={() => toggleCollapse(status)} className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700">
+            {collapsed[status] ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </button>
+          <StatusIcon className={`h-4 w-4 ${colAccents.tone}`} />
+          <h2 className="text-sm font-bold text-slate-800">{status}</h2>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${colAccents.count}`}>{items.length}</span>
+          <span className="rounded-md bg-white px-2 py-0.5 text-xs font-bold text-slate-500 shadow-sm">{items.length}</span>
           {!collapsed[status] && colTotal > 0 && (
             <span className="text-[10px] text-slate-400">
               {items.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0)}pts
             </span>
           )}
+          {isAdmin && (
+            <button onClick={() => onAdd(status)} className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-cyan-600">
+              <Plus className="h-4 w-4" />
+            </button>
+          )}
         </div>
       </div>
       <div className={`overflow-hidden transition-all ${collapsed[status] ? "max-h-0" : "max-h-[9999px]"}`}>
         {colTotal > 0 && (
-          <div className="px-4 pt-3">
+          <div className="px-3">
             <div className="flex justify-between text-[10px] text-slate-400 mb-1">
               <span>Progreso</span>
               <span>{colProgress}%</span>
             </div>
             <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
-              <div className={`h-full rounded-full transition-all duration-300 ${colAccents.bar}`} style={{ width: `${colProgress}%` }} />
+              <div className={`h-full rounded-full transition-all duration-300 ${colAccents.accent}`} style={{ width: `${colProgress}%` }} />
             </div>
           </div>
         )}
-        <div className="p-3">
+        <div className="p-2.5">
           <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-2.5">
               {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} />)}
@@ -201,16 +282,16 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
 function DueDateBadge({ dueDate }) {
   const days = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
   const color = days < 0 ? "text-red-500" : days <= 3 ? "text-amber-500" : "text-emerald-500";
-  const label = days < 0 ? `🔴 Vencida` : days === 0 ? `🔴 Hoy` : days === 1 ? `🟡 Mañana` : days <= 3 ? `🟡 ${days} días` : days > 30 ? `🟢 > 30 días` : `🟢 ${days} días`;
-  return <div className={`mt-1 text-[11px] font-medium ${color}`}>{label}</div>;
+  const label = days < 0 ? `Vencida` : days === 0 ? `Hoy` : days === 1 ? `Mañana` : days > 30 ? `> 30 días` : `${days} días`;
+  return <span className={`inline-flex items-center gap-1 font-medium ${color}`}><Calendar className="h-3.5 w-3.5" />{label}</span>;
 }
 
-function Modal({ open, onClose, children }) {
+function Modal({ open, onClose, children, wide = false }) {
   useEffect(() => { if (open) document.body.style.overflow = "hidden"; else document.body.style.overflow = ""; return () => { document.body.style.overflow = ""; }; }, [open]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4 backdrop-blur-sm" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-2xl border bg-white p-4 md:p-6 shadow-2xl animate-in fade-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-2 backdrop-blur-sm md:p-4" onClick={onClose}>
+      <div className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${wide ? "max-w-[1420px] p-0" : "max-w-lg p-4 md:p-6"}`} onClick={e => e.stopPropagation()}>
         {children}
       </div>
     </div>
@@ -223,20 +304,20 @@ function TaskForm({ onSave, onClose, initial, users }) {
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
-      <input placeholder="Título" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" autoFocus />
-      <textarea placeholder="Descripción (opcional)" value={f.description || ""} onChange={e => setF({ ...f, description: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" rows={2} />
+      <input placeholder="Título" value={f.title} onChange={e => setF({ ...f, title: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" autoFocus />
+      <textarea placeholder="Descripción (opcional)" value={f.description || ""} onChange={e => setF({ ...f, description: e.target.value })} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" rows={2} />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <select value={f.module} onChange={e => setF({ ...f, module: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">{modules.map(m => <option key={m} value={m}>{m}</option>)}</select>
-        <select value={f.phase} onChange={e => setF({ ...f, phase: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">{Object.entries(phaseMap).map(([k, v]) => <option key={k} value={k}>{k} - {v}</option>)}</select>
-        <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alta">🔥 Alta</option><option value="Media">⚡ Media</option><option value="Baja">💤 Baja</option></select>
-        <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900"><option value="Alto">🔥 Alto</option><option value="Medio">⚡ Medio</option><option value="Bajo">💤 Bajo</option></select>
+        <select value={f.module} onChange={e => setF({ ...f, module: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900">{modules.map(m => <option key={m} value={m}>{m}</option>)}</select>
+        <select value={f.phase} onChange={e => setF({ ...f, phase: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900">{Object.entries(phaseMap).map(([k, v]) => <option key={k} value={k}>{k} - {v}</option>)}</select>
+        <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900"><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select>
+        <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900"><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select>
       </div>
-      <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+      <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
       {isAdmin && users.length > 0 && (
         <select value={f.assignedTo} onChange={e => {
           const u = users.find(u => u.id === e.target.value);
           setF({ ...f, assignedTo: e.target.value, assignedName: u ? u.name : "" });
-        }} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-slate-900">
+        }} className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900">
           <option value="">Sin asignar</option>
           {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
         </select>
@@ -251,8 +332,20 @@ function TaskForm({ onSave, onClose, initial, users }) {
 
 function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users }) {
   const [logs, setLogs] = useState([]);
+  const [comments, setComments] = useState([]);
+  const [commentText, setCommentText] = useState("");
+  const [activeTab, setActiveTab] = useState("details");
+  const { user, userData } = useAuth();
+  const isLocalDetailDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const detailUser = user || (isLocalDetailDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
+  const detailUserData = userData || (isLocalDetailDemo ? { name: "Demo NoraHR" } : null);
   const statusOrder = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
   const currentIdx = statusOrder.indexOf(task.status);
+  const progress = currentIdx < 0 ? 0 : Math.round((currentIdx / (statusOrder.length - 1)) * 100);
+  const status = statusMeta[task.status] || statusMeta.Pendiente;
+  const StatusIcon = status.icon;
+  const priority = priorityMeta[task.priority] || priorityMeta.Media;
+  const PriorityIcon = priority.icon;
 
   const availableStatuses = isAdmin
     ? statuses.filter(s => s !== task.status)
@@ -277,6 +370,48 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     return unsub;
   }, [task.id, activeBoardId]);
 
+  useEffect(() => {
+    if (!activeBoardId || !task.id) return;
+    const q = query(
+      collection(db, "boards", activeBoardId, "tasks", task.id, "comments"),
+      orderBy("createdAt", "asc")
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Comments listener error:", err);
+    });
+    return unsub;
+  }, [task.id, activeBoardId]);
+
+  async function sendComment(e) {
+    e.preventDefault();
+    const text = commentText.trim();
+    if (!text || !detailUser) return;
+    if (!activeBoardId) {
+      setComments(prev => [...prev, {
+        id: `local-comment-${Date.now()}`,
+        text,
+        userId: detailUser.uid,
+        userName: detailUserData?.name || detailUser.email,
+        createdAt: new Date().toISOString(),
+      }]);
+      setCommentText("");
+      return;
+    }
+    try {
+      await addDoc(collection(db, "boards", activeBoardId, "tasks", task.id, "comments"), {
+        text,
+        userId: user.uid,
+        userName: userData?.name || user.email,
+        createdAt: serverTimestamp(),
+      });
+      setCommentText("");
+    } catch (err) {
+      console.error("Error creating comment:", err);
+    }
+  }
+
   function formatTimestamp(ts) {
     if (!ts) return "";
     const d = ts.toDate ? ts.toDate() : new Date(ts);
@@ -298,106 +433,292 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     restored: "restauró esta tarea",
   };
 
+  function editFromDetail(tab = "details") {
+    setActiveTab(tab);
+    onEdit(task);
+    onClose();
+  }
+
   return (
-    <div className="space-y-4 max-h-[80vh] overflow-y-auto">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-2">
-          <span className={`inline-block h-3 w-3 rounded-full ${priorityColor(task.priority)}`} />
-          <span className={`rounded-md px-2 py-0.5 text-xs font-semibold ${modColors[task.module] || "bg-slate-100 text-slate-600"}`}>{task.module}</span>
-        </div>
-        <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
-      </div>
-      <h2 className="text-xl font-bold text-slate-900">{task.title}</h2>
-      <p className="text-sm leading-6 text-slate-500">{task.description || "Sin descripción"}</p>
-      <div className="rounded-xl bg-slate-50 p-4 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Estado</span>
-          <span className="text-sm font-semibold text-slate-700">{task.status === "Hecho" ? "✅" : task.status === "En progreso" ? "⏳" : task.status === "Bloqueado" ? "⚠️" : "○"} {task.status}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Prioridad</span>
-          <span className={`text-sm font-semibold ${task.priority === "Alta" ? "text-red-600" : task.priority === "Media" ? "text-amber-600" : "text-slate-500"}`}>{task.priority}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Fase</span>
-          <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase} - {phaseMap[task.phase]}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Esfuerzo</span>
-          <span className="text-sm font-semibold text-slate-700">{effortLabels[task.effort]}</span>
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Asignado a</span>
-          {isAdmin && users?.length > 0 ? (
-            <select
-              value={task.assignedTo || ""}
-              onChange={async (e) => {
-                const userId = e.target.value;
-                const u = users.find(uu => uu.id === userId);
-                try {
-                  await updateDoc(doc(db, "boards", activeBoardId, "tasks", task.id), {
-                    assignedTo: userId,
-                    assignedName: u ? u.name : "",
-                    updatedAt: serverTimestamp(),
-                  });
-                } catch (err) {
-                  console.error("Error assigning task:", err);
-                }
-              }}
-              className="text-right text-sm font-semibold text-slate-700 bg-transparent border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-slate-400 cursor-pointer max-w-[160px]"
-            >
-              <option value="">Sin asignar</option>
-              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-            </select>
-          ) : (
-            <p className="text-sm font-semibold text-slate-700">{task.assignedName || "—"}</p>
-          )}
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-slate-400">Fecha límite</span>
-          <p className="text-sm font-semibold text-slate-700">{task.dueDate ? (() => {
-            const days = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-            const icon = days < 0 ? "🔴" : days <= 3 ? "🟡" : "🟢";
-            return `${icon} ${new Date(task.dueDate).toLocaleDateString()}`;
-          })() : "—"}</p>
-        </div>
-      </div>
-      {availableStatuses.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {availableStatuses.map(s => (
-            <button key={s} onClick={() => { onStatus(task.id, s); onClose(); }} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">→ {s}</button>
+    <div className="flex h-[88vh] min-h-[560px] flex-col overflow-hidden rounded-2xl bg-white text-slate-900">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-3">
+        <div className="flex min-w-0 items-center gap-2 rounded-xl bg-slate-100 p-1">
+          {[
+            ["details", "Detalles"],
+            ["activity", "Actividad"],
+            ["timing", "Timing"],
+          ].map(([key, label]) => (
+            <button key={key} onClick={() => setActiveTab(key)} className={tabClass(activeTab === key)}>
+              {label}
+            </button>
           ))}
         </div>
-      )}
-      {isAdmin && (
-        <div className="flex flex-wrap gap-3 border-t border-slate-100 pt-4">
-          <button onClick={() => { onEdit(task); onClose(); }} className="rounded-lg bg-slate-100 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200 transition-colors">✎ Editar</button>
-          {task.archived ? (
-            <button onClick={() => { onArchive(task.id, false); onClose(); }} className="rounded-lg bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-600 hover:bg-emerald-100 transition-colors">📦 Restaurar</button>
-          ) : (
-            <button onClick={() => { onArchive(task.id, true); onClose(); }} className="rounded-lg bg-amber-50 px-4 py-2 text-sm font-medium text-amber-600 hover:bg-amber-100 transition-colors">📦 Archivar</button>
-          )}
-          <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="rounded-lg bg-red-50 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">🗑️ Eliminar</button>
-        </div>
-      )}
-      {logs.length > 0 && (
-        <div className="border-t border-slate-100 pt-4">
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">Actividad</h3>
-          <div className="space-y-2">
-            {logs.map(l => (
-              <div key={l.id} className="flex items-start gap-2 text-xs">
-                <span className="mt-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" />
-                <div>
-                  <span className="font-medium text-slate-700">{l.userName}</span>{" "}
-                  <span className="text-slate-500">{actionLabels[l.action] || l.action}</span>
-                  {l.details && <span className="text-slate-400"> · {l.details}</span>}
-                  <span className="text-slate-300 ml-1">{formatTimestamp(l.createdAt)}</span>
+        <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700">
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      <div className="flex min-h-0 flex-1 flex-col bg-slate-100/70 lg:flex-row">
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+          {activeTab === "details" && (
+            <div className="mx-auto max-w-3xl space-y-5">
+              <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-start gap-3">
+                    <Avatar name={task.assignedName || detailUserData?.name || detailUser?.email} size="lg" />
+                    <div>
+                      <p className="text-xs font-semibold text-slate-400">{task.updatedAt ? `Actualizada ${formatTimestamp(task.updatedAt)}` : "Detalle de tarea"}</p>
+                      <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-950">{task.title}</h2>
+                    </div>
+                  </div>
+                  <FieldPill icon={StatusIcon} className={status.soft}>{task.status}</FieldPill>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <FieldPill icon={PriorityIcon} className={priority.tone}>{task.priority}</FieldPill>
+                  <FieldPill icon={Tag} className={`${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>{task.module}</FieldPill>
+                  <FieldPill className={`${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase} - {phaseMap[task.phase]}</FieldPill>
+                  <FieldPill icon={Gauge} className="border-slate-200 bg-slate-50 text-slate-600">{task.effort}</FieldPill>
+                </div>
+                <div className="rounded-xl border border-slate-200">
+                  <div className="border-b border-slate-200 px-4 py-3">
+                    <h3 className="text-xs font-bold uppercase text-slate-400">Descripción</h3>
+                  </div>
+                  <p className="min-h-[96px] px-4 py-4 text-sm leading-7 text-slate-600">{task.description || "Sin descripción"}</p>
                 </div>
               </div>
-            ))}
+
+              <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                  <h3 className="text-sm font-bold text-slate-900">Assignees</h3>
+                  <Users className="h-4 w-4 text-slate-300" />
+                </div>
+                <div className="p-5">
+                  {isAdmin && users?.length > 0 ? (
+                    <select
+                      value={task.assignedTo || ""}
+                      onChange={async (e) => {
+                        const userId = e.target.value;
+                        const u = users.find(uu => uu.id === userId);
+                        try {
+                          await updateDoc(doc(db, "boards", activeBoardId, "tasks", task.id), {
+                            assignedTo: userId,
+                            assignedName: u ? u.name : "",
+                            updatedAt: serverTimestamp(),
+                          });
+                        } catch (err) {
+                          console.error("Error assigning task:", err);
+                        }
+                      }}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400"
+                    >
+                      <option value="">Sin asignar</option>
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                      {task.assignedName ? <Avatar name={task.assignedName} /> : <User className="h-5 w-5 text-slate-300" />}
+                      <span className="text-sm font-semibold text-slate-700">{task.assignedName || "Sin asignar"}</span>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              <section className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Start & Due date</h3>
+                    <Calendar className="h-4 w-4 text-slate-300" />
+                  </div>
+                  <p className="text-sm font-semibold text-slate-700">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha límite"}</p>
+                  {task.dueDate && <div className="mt-2 text-xs"><DueDateBadge dueDate={task.dueDate} /></div>}
+                </div>
+                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex items-center justify-between">
+                    <h3 className="text-sm font-bold text-slate-900">Attachments</h3>
+                    <Plus className="h-4 w-4 text-slate-300" />
+                  </div>
+                  <p className="text-sm text-slate-400">Sin adjuntos por ahora</p>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {activeTab === "activity" && (
+            <div className="mx-auto flex min-h-full max-w-3xl flex-col">
+              <div className="flex-1 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-slate-950">Actividad</h3>
+                    <p className="text-sm text-slate-400">{comments.length} comentarios · {logs.length} eventos</p>
+                  </div>
+                  <MessageSquare className="h-5 w-5 text-slate-300" />
+                </div>
+
+                <div className="space-y-4">
+                  {comments.map(c => (
+                    <div key={c.id} className="flex gap-3">
+                      <Avatar name={c.userName} />
+                      <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-4 py-3">
+                        <div className="mb-1 flex items-center justify-between gap-2">
+                          <span className="truncate text-sm font-bold text-slate-800">{c.userName}</span>
+                          <span className="shrink-0 text-[10px] text-slate-400">{formatTimestamp(c.createdAt)}</span>
+                        </div>
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{c.text}</p>
+                      </div>
+                    </div>
+                  ))}
+
+                  {logs.map(l => (
+                    <div key={l.id} className="flex gap-3 text-sm">
+                      <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-cyan-300" />
+                      <div>
+                        <span className="font-semibold text-slate-700">{l.userName}</span>{" "}
+                        <span className="text-slate-500">{actionLabels[l.action] || l.action}</span>
+                        {l.details && <span className="text-slate-400"> · {l.details}</span>}
+                        <span className="ml-1 text-xs text-slate-300">{formatTimestamp(l.createdAt)}</span>
+                      </div>
+                    </div>
+                  ))}
+
+                  {comments.length === 0 && logs.length === 0 && (
+                    <div className="flex min-h-[260px] flex-col items-center justify-center text-center text-slate-300">
+                      <MessageSquare className="mb-3 h-12 w-12" />
+                      <p className="text-sm font-semibold">No hay actividad todavía</p>
+                      <p className="mt-1 max-w-sm text-sm">Comenta o cambia el estado para iniciar la conversación.</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <form onSubmit={sendComment} className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+                <MessageSquare className="ml-2 h-4 w-4 text-slate-300" />
+                <input
+                  value={commentText}
+                  onChange={e => setCommentText(e.target.value)}
+                  placeholder="Comenta o menciona contexto para esta tarea..."
+                  className="min-w-0 flex-1 bg-transparent px-2 py-2 text-xs outline-none placeholder:text-slate-300"
+                />
+                <button disabled={!commentText.trim()} className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-600 text-white transition-colors hover:bg-cyan-700 disabled:bg-slate-200">
+                  <Send className="h-4 w-4" />
+                </button>
+              </form>
+            </div>
+          )}
+
+          {activeTab === "timing" && (
+            <div className="mx-auto max-w-3xl space-y-5">
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="mb-4 flex items-center justify-between">
+                  <h3 className="text-lg font-bold text-slate-950">Timing</h3>
+                  <Clock3 className="h-5 w-5 text-slate-300" />
+                </div>
+                <div className="mb-2 flex justify-between text-xs font-semibold text-slate-400">
+                  <span>{task.status}</span>
+                  <span>{progress}%</span>
+                </div>
+                <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                  <div className={`h-full rounded-full ${status.accent}`} style={{ width: `${progress}%` }} />
+                </div>
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">Fecha límite</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha"}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">Última actualización</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.updatedAt ? formatTimestamp(task.updatedAt) : "Sin registro"}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">Creada</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.createdAt ? formatTimestamp(task.createdAt) : "Sin registro"}</p>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">Esfuerzo</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.effort}</p>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+        </main>
+
+        <aside className="shrink-0 border-l border-slate-200 bg-slate-50 p-4 lg:w-72">
+          <div className="space-y-5">
+            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="mb-3 flex items-center justify-between">
+                <span className="text-xs font-bold uppercase text-slate-400">Resumen</span>
+                <MoreVertical className="h-4 w-4 text-slate-300" />
+              </div>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-slate-500"><Users className="h-4 w-4" />Assignees</span>
+                  <span className="font-bold text-slate-800">{task.assignedName ? 1 : 0}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-slate-500"><MessageSquare className="h-4 w-4" />Comments</span>
+                  <span className="font-bold text-slate-800">{comments.length}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-slate-500"><Archive className="h-4 w-4" />Archived</span>
+                  <span className="font-bold text-slate-800">{task.archived ? "Sí" : "No"}</span>
+                </div>
+              </div>
+            </div>
+
+            {availableStatuses.length > 0 && (
+              <div>
+                <h4 className="mb-2 text-xs font-bold uppercase text-slate-400">Mover estado</h4>
+                <div className="space-y-2">
+                  {availableStatuses.map(s => {
+                    const M = statusMeta[s]?.icon || Circle;
+                    return (
+                      <button key={s} onClick={() => onStatus(task.id, s)} className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-600 hover:border-cyan-200 hover:text-cyan-700">
+                        <M className="h-4 w-4" />
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <h4 className="mb-2 text-xs font-bold uppercase text-slate-400">Acciones</h4>
+              <div className="space-y-1">
+                {[
+                  [PriorityIcon, "Editar prioridad", () => editFromDetail()],
+                  [Tag, "Editar etiquetas", () => editFromDetail()],
+                  [Calendar, "Editar fecha", () => editFromDetail("timing")],
+                  [Gauge, "Editar esfuerzo", () => editFromDetail("timing")],
+                  [MessageSquare, "Ver comentarios", () => setActiveTab("activity")],
+                  [Clock3, "Ver timing", () => setActiveTab("timing")],
+                ].map(([Icon, label, action]) => (
+                  <button key={label} onClick={action} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white">
+                    <Icon className="h-4 w-4 text-slate-400" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {isAdmin && (
+              <div>
+                <h4 className="mb-2 text-xs font-bold uppercase text-slate-400">Admin</h4>
+                <div className="grid grid-cols-1 gap-2">
+                  <button onClick={() => { onEdit(task); onClose(); }} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
+                    <Pencil className="h-4 w-4" /> Editar
+                  </button>
+                  <button onClick={() => { onArchive(task.id, !task.archived); onClose(); }} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50">
+                    <Archive className="h-4 w-4" /> {task.archived ? "Restaurar" : "Archivar"}
+                  </button>
+                  <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">
+                    <Trash2 className="h-4 w-4" /> Eliminar
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        </aside>
+      </div>
     </div>
   );
 }
@@ -441,19 +762,19 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] p-4">
       <div className="w-full max-w-sm rounded-2xl border bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900 text-lg font-bold text-white">N</span>
+          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-lg font-bold text-white">N</span>
           <h1 className="mt-3 text-lg font-bold text-slate-900">NoraHR Roadmap</h1>
           <p className="text-sm text-slate-400">{mode === "login" ? "Inicia sesión para continuar" : "Crea tu cuenta"}</p>
         </div>
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode === "signup" && (
             <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" required
-              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
           )}
           <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" type="email" required autoComplete="email"
-            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
           <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" type="password" required autoComplete={mode === "login" ? "current-password" : "new-password"}
-            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm outline-none focus:border-slate-900 transition-colors" />
+            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
           {error && <p className="text-xs text-red-500">{error}</p>}
           <button type="submit" disabled={submitting}
             className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
@@ -499,7 +820,7 @@ function AdminPanel({ users, currentUser, onClose }) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-slate-900">⚙️ Administrar usuarios</h2>
+        <h2 className="flex items-center gap-2 text-lg font-bold text-slate-900"><Settings className="h-5 w-5 text-slate-400" /> Administrar usuarios</h2>
         <button onClick={onClose} className="text-slate-400 hover:text-slate-600 transition-colors">✕</button>
       </div>
       <p className="text-xs text-slate-400">El primer usuario registrado es admin automáticamente.</p>
@@ -511,7 +832,7 @@ function AdminPanel({ users, currentUser, onClose }) {
               <p className="text-xs text-slate-400 truncate">{u.email}</p>
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
-              <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${u.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-600"}`}>{u.role}</span>
+              <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${u.role === "admin" ? "bg-cyan-100 text-cyan-700" : "bg-slate-100 text-slate-600"}`}>{u.role}</span>
               {u.id !== currentUser?.uid && (
                 <>
                   <button onClick={() => toggleRole(u.id, u.role)} disabled={updating[u.id]}
@@ -535,6 +856,12 @@ function AdminPanel({ users, currentUser, onClose }) {
 export default function NoraHRKanban() {
   const { user, userData, loading, logout, isAdmin } = useAuth();
   const { activeBoardId, boards } = useBoard();
+  const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const appUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
+  const appUserData = userData || (isLocalDemo ? { name: "Demo NoraHR", role: "admin", email: "demo@norahr.local" } : null);
+  const appIsAdmin = isAdmin || isLocalDemo;
+  const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : null);
+  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "NoraHR Roadmap" }] : boards);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -542,6 +869,7 @@ export default function NoraHRKanban() {
   const [prio, setPrio] = useState("Todas");
   const [phase, setPhase] = useState("Todas");
   const [showAdd, setShowAdd] = useState(false);
+  const [newTaskStatus, setNewTaskStatus] = useState("Pendiente");
   const [editT, setEditT] = useState(null);
   const [detailT, setDetailT] = useState(null);
   const [collapsed, setCollapsed] = useState({});
@@ -552,12 +880,14 @@ export default function NoraHRKanban() {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
+  const [viewMode, setViewMode] = useState("board");
+  const [myWorkOnly, setMyWorkOnly] = useState(false);
   const [activeId, setActiveId] = useState(null);
   const activeTask = useMemo(() => tasks.find(t => t.id === activeId), [activeId, tasks]);
   const seeded = useRef({});
   const migrated = useRef(false);
-  const boardsRef = useRef(boards);
-  boardsRef.current = boards;
+  const boardsRef = useRef(appBoards);
+  boardsRef.current = appBoards;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -565,6 +895,18 @@ export default function NoraHRKanban() {
   );
 
   useEffect(() => {
+    if (isLocalDemo) {
+      setTasks(initialTasks.map((t, idx) => ({
+        ...t,
+        id: String(t.id),
+        order: idx,
+        dueDate: "",
+        archived: false,
+        assignedTo: idx % 3 === 0 ? "local-demo-user" : "",
+        assignedName: idx % 3 === 0 ? "Demo NoraHR" : "",
+      })));
+      return;
+    }
     if (!user || !activeBoardId) return;
     const q = query(collection(db, "boards", activeBoardId, "tasks"), orderBy("order", "asc"));
     const unsub = onSnapshot(q, (snap) => {
@@ -578,7 +920,7 @@ export default function NoraHRKanban() {
           )
         );
       }
-      if (snap.empty && isAdmin && !seeded.current[activeBoardId]) {
+      if (snap.empty && appIsAdmin && !seeded.current[activeBoardId]) {
         seeded.current[activeBoardId] = true;
         const board = boardsRef.current.find(b => b.id === activeBoardId);
         if (board && board.name === "NoraHR Roadmap") {
@@ -610,18 +952,22 @@ export default function NoraHRKanban() {
       }
     });
     return unsub;
-  }, [user, isAdmin, activeBoardId]);
+  }, [user, appIsAdmin, activeBoardId, isLocalDemo]);
 
   useEffect(() => {
+    if (isLocalDemo) {
+      setUsers([]);
+      return;
+    }
     if (!user) return;
     const unsub = onSnapshot(collection(db, "users"), (snap) => {
       setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return unsub;
-  }, [user]);
+  }, [user, isLocalDemo]);
 
   useEffect(() => {
-    if (!user || !isAdmin || !activeBoardId || migrated.current) return;
+    if (isLocalDemo || !user || !appIsAdmin || !activeBoardId || migrated.current) return;
     (async () => {
       try {
         const snap = await getDocs(collection(db, "tasks"));
@@ -642,7 +988,7 @@ export default function NoraHRKanban() {
         console.error("Migration failed:", e);
       }
     })();
-  }, [user, isAdmin, activeBoardId]);
+  }, [user, appIsAdmin, activeBoardId, isLocalDemo]);
 
   const userMap = useMemo(() => {
     const m = {};
@@ -652,13 +998,16 @@ export default function NoraHRKanban() {
 
   const displayedTasks = useMemo(() => {
     let ts = tasks.filter(t => showArchived ? t.archived : !t.archived);
+    if (myWorkOnly) {
+      ts = ts.filter(t => t.assignedTo === appUser?.uid || t.assignedName === appUserData?.name);
+    }
     if (overdueOnly) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       ts = ts.filter(t => t.dueDate && new Date(t.dueDate) < today);
     }
     return filterTasks(ts, searchQuery, mod, prio, phase);
-  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly]);
+  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, appUser?.uid, appUserData?.name]);
 
   const overdueCount = useMemo(() => {
     const today = new Date();
@@ -677,8 +1026,10 @@ export default function NoraHRKanban() {
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
   const effortDone = tasks.filter(t => t.status === "Hecho").reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
   const effortTotal = tasks.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
+  const effortProgress = effortTotal ? Math.round((effortDone / effortTotal) * 100) : 0;
 
   async function createLog(taskId, taskTitle, action, details) {
+    if (isLocalDemo) return;
     if (!user || !activeBoardId) return;
     try {
       await addDoc(collection(db, "boards", activeBoardId, "logs"), {
@@ -698,6 +1049,10 @@ export default function NoraHRKanban() {
   async function archiveTask(id, archived) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
+    if (isLocalDemo) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, archived } : t));
+      return;
+    }
     try {
       await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { archived, updatedAt: serverTimestamp() });
       createLog(id, task.title, archived ? "archived" : "restored", "");
@@ -708,7 +1063,7 @@ export default function NoraHRKanban() {
 
   async function handleDragEnd(e) {
     const { active, over } = e;
-    if (!over || !isAdmin) return;
+    if (!over || !appIsAdmin) return;
 
     const taskId = String(active.id);
     const task = tasks.find(t => t.id === taskId);
@@ -732,6 +1087,11 @@ export default function NoraHRKanban() {
     }
 
     if (newStatus || isReorder) {
+      if (isLocalDemo) {
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), order: Date.now() } : t));
+        setActiveId(null);
+        return;
+      }
       try {
         const updates = { updatedAt: serverTimestamp(), order: Date.now() };
         if (newStatus) updates.status = newStatus;
@@ -747,6 +1107,10 @@ export default function NoraHRKanban() {
   async function updateStatus(id, s) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
+    if (isLocalDemo) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s, order: Date.now() } : t));
+      return;
+    }
     try {
       await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { status: s, order: Date.now(), updatedAt: serverTimestamp() });
       createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
@@ -757,6 +1121,10 @@ export default function NoraHRKanban() {
 
   async function deleteTask(id) {
     const task = tasks.find(t => t.id === id);
+    if (isLocalDemo) {
+      setTasks(prev => prev.filter(t => t.id !== id));
+      return;
+    }
     try {
       await deleteDoc(doc(db, "boards", activeBoardId, "tasks", id));
       if (task) createLog(id, task.title, "deleted", "");
@@ -766,6 +1134,26 @@ export default function NoraHRKanban() {
   }
 
   async function addTask(f) {
+    if (isLocalDemo) {
+      setTasks(prev => [{
+        title: f.title,
+        module: f.module,
+        phase: f.phase,
+        priority: f.priority,
+        effort: f.effort,
+        description: f.description || "",
+        status: newTaskStatus,
+        order: Date.now(),
+        dueDate: f.dueDate || "",
+        archived: false,
+        assignedTo: f.assignedTo || "",
+        assignedName: f.assignedName || "",
+        id: `local-${Date.now()}`,
+      }, ...prev]);
+      setShowAdd(false);
+      setNewTaskStatus("Pendiente");
+      return;
+    }
     try {
       const ref = await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
         title: f.title,
@@ -774,7 +1162,7 @@ export default function NoraHRKanban() {
         priority: f.priority,
         effort: f.effort,
         description: f.description || "",
-        status: "Pendiente",
+        status: newTaskStatus,
         order: Date.now(),
         dueDate: f.dueDate || "",
         archived: false,
@@ -786,12 +1174,19 @@ export default function NoraHRKanban() {
       });
       createLog(ref.id, f.title, "created", "");
       setShowAdd(false);
+      setNewTaskStatus("Pendiente");
     } catch (e) {
       console.error("Error adding task:", e);
     }
   }
 
   async function editTask(f) {
+    if (isLocalDemo) {
+      const { id, ...data } = f;
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+      setEditT(null);
+      return;
+    }
     try {
       const { id, ...data } = f;
       await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { ...data, updatedAt: serverTimestamp() });
@@ -811,10 +1206,45 @@ export default function NoraHRKanban() {
 
   function toggleCollapse(s) { setCollapsed(c => ({ ...c, [s]: !c[s] })); }
 
+  function openAddTask(status = "Pendiente") {
+    setNewTaskStatus(status);
+    setShowAdd(true);
+  }
+
+  function handleSidebarAction(action) {
+    if (action === "all") {
+      setMyWorkOnly(false);
+      setShowArchived(false);
+      setOverdueOnly(false);
+      setSearchQuery("");
+      setMod("Todos");
+      setPrio("Todas");
+      setPhase("Todas");
+      setViewMode("board");
+    }
+    if (action === "my-work") {
+      setMyWorkOnly(true);
+      setShowArchived(false);
+      setOverdueOnly(false);
+      setViewMode("list");
+    }
+    if (action === "comments") {
+      setViewMode("list");
+      setMyWorkOnly(false);
+      setSearchQuery("");
+    }
+    if (action === "notifications") {
+      setShowArchived(false);
+      setMyWorkOnly(false);
+      setOverdueOnly(overdueCount > 0);
+      setViewMode("list");
+    }
+  }
+
   const activeBoardName = useMemo(() => {
-    const b = boards.find(b => b.id === activeBoardId);
+    const b = appBoards.find(b => b.id === appActiveBoardId);
     return b ? b.name : "NoraHR Roadmap";
-  }, [boards, activeBoardId]);
+  }, [appBoards, appActiveBoardId]);
 
   const phasesOptions = ["Todas", ...Object.keys(phaseMap)];
 
@@ -829,63 +1259,87 @@ export default function NoraHRKanban() {
     );
   }
 
-  if (!user) return <LoginForm />;
+  if (!appUser) return <LoginForm />;
 
   return (
     <>
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
-      <div className="min-h-screen bg-[#f8f9fa]">
-        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/80 backdrop-blur-md">
-          <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-6">
-            <div className="flex items-center gap-3">
-              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-900 text-sm font-bold text-white">N</span>
-              <div>
-                <h1 className="text-sm font-bold text-slate-900">{activeBoardName}</h1>
-                <p className="text-[11px] text-slate-400">{tasks.length} tareas · {progress}% · {Math.round((effortDone / effortTotal) * 100)}% esfuerzo</p>
+      <div className="min-h-screen bg-slate-200/60">
+        <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
+          <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-3 py-1.5 md:px-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-600 text-xs font-black text-white shadow-sm">N</span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="truncate text-sm font-black text-slate-900">{activeBoardName}</h1>
+                  <MoreVertical className="hidden h-4 w-4 text-slate-300 md:block" />
+                </div>
+                <div className="hidden items-center gap-1 text-[10px] font-semibold text-slate-400 sm:flex">
+                  <span>{tasks.length} tareas</span>
+                  <span>·</span>
+                  <span>{progress}% avance</span>
+                  <span>·</span>
+                  <span>{effortProgress}% esfuerzo</span>
+                </div>
               </div>
             </div>
+
+            <div className="hidden h-8 items-center rounded-xl bg-slate-100 p-1 md:flex">
+              <button onClick={() => setViewMode(viewMode === "list" ? "board" : "list")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "list" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
+                <ListFilter className="h-4 w-4" /> {viewMode === "list" ? "Board view" : "Task list"}
+              </button>
+              <button onClick={() => setShowArchived(!showArchived)} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${showArchived ? "bg-amber-50 text-amber-700" : "text-slate-500"}`}>
+                <Archive className="h-4 w-4" /> Archive
+              </button>
+            </div>
+
+            <div className="relative ml-auto hidden min-w-[240px] flex-1 max-w-xl md:block">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search" className="h-8 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300 focus:bg-white" />
+            </div>
+
             <div className="flex items-center gap-2">
-              <button onClick={() => setSidebarOpen(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">📋 Boards</button>
-              <div className="hidden md:flex items-center gap-2">
-                <span className="text-[11px] text-slate-400">
-                  👤 {userData?.name || user.email}
-                  <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
-                </span>
-                {isAdmin && (
-                  <button onClick={() => setShowAdmin(true)} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">⚙️ Admin</button>
-                )}
-                <button onClick={() => setShowArchived(!showArchived)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${showArchived ? "bg-amber-100 text-amber-700 border-amber-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
-                  {showArchived ? "📦 Ver activas" : "📦 Archivadas"}
+              {overdueCount > 0 && !showArchived && (
+                <button onClick={() => setOverdueOnly(!overdueOnly)} className={`hidden h-8 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold md:flex ${overdueOnly ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`}>
+                  <Flame className="h-4 w-4" /> {overdueOnly ? "Todas" : overdueCount}
                 </button>
-                {overdueCount > 0 && !showArchived && (
-                  <button onClick={() => setOverdueOnly(!overdueOnly)} className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${overdueOnly ? "bg-red-100 text-red-700 border-red-200" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>
-                    🔴 {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
+              )}
+              <button onClick={() => setSidebarOpen(true)} className="flex h-8 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                <LayoutDashboard className="h-4 w-4" /> <span className="hidden sm:inline">Boards</span>
+              </button>
+              <div className="hidden items-center gap-2 md:flex">
+                {appIsAdmin && (
+                  <button onClick={() => setShowAdmin(true)} className="flex h-8 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
+                    <Settings className="h-4 w-4" /> Admin
                   </button>
                 )}
-                <button onClick={exportCSV} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">Export</button>
-                <button onClick={logout} className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500 hover:bg-slate-50 transition-colors">Salir</button>
+                <button onClick={exportCSV} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Export</button>
+                <button onClick={isLocalDemo ? undefined : logout} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">{isLocalDemo ? "Demo" : "Salir"}</button>
+                <Avatar name={appUserData?.name || appUser.email} />
               </div>
               <div className="relative md:hidden">
-                <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm text-slate-600 hover:bg-slate-50 transition-colors">☰</button>
+                <button onClick={() => setShowMobileMenu(!showMobileMenu)} className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50">
+                  <SlidersHorizontal className="h-4 w-4" />
+                </button>
                 {showMobileMenu && (
                   <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-slate-200 bg-white shadow-xl p-2 space-y-1 z-50">
                     <div className="px-3 py-2 text-xs text-slate-400 border-b border-slate-100">
-                      👤 {userData?.name || user.email}
-                      <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${isAdmin ? "bg-purple-100 text-purple-700" : "bg-slate-100 text-slate-500"}`}>{isAdmin ? "Admin" : "Member"}</span>
+                      {appUserData?.name || appUser.email}
+                      <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${appIsAdmin ? "bg-cyan-100 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>{appIsAdmin ? "Admin" : "Member"}</span>
                     </div>
-                    {isAdmin && (
-                      <button onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">⚙️ Admin</button>
+                    {appIsAdmin && (
+                      <button onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Admin</button>
                     )}
                     <button onClick={() => { setShowArchived(!showArchived); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
-                      {showArchived ? "📦 Activas" : "📦 Archivadas"}
+                      {showArchived ? "Activas" : "Archivadas"}
                     </button>
                     {overdueCount > 0 && !showArchived && (
                       <button onClick={() => { setOverdueOnly(!overdueOnly); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
-                        🔴 {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
+                        {overdueOnly ? "Todas" : `${overdueCount} vencidas`}
                       </button>
                     )}
-                    <button onClick={() => { exportCSV(); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">📥 Export CSV</button>
-                    <button onClick={logout} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">🚪 Salir</button>
+                    <button onClick={() => { exportCSV(); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Export CSV</button>
+                    {!isLocalDemo && <button onClick={logout} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">Salir</button>}
                   </div>
                 )}
               </div>
@@ -893,36 +1347,72 @@ export default function NoraHRKanban() {
           </div>
         </header>
 
-        <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 md:py-5">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar..." className="min-w-[140px] md:min-w-[160px] rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none focus:border-slate-400 transition-colors" />
-            <button onClick={() => setShowFilters(!showFilters)} className="md:hidden rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors">
-              {showFilters ? "▲ Filtros" : "▼ Filtros"}
+        <div className="mx-auto max-w-[1800px] px-3 py-3 md:px-4">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 md:hidden">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar..." className="h-8 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none focus:border-cyan-300" />
+            </div>
+            <button onClick={() => setShowFilters(!showFilters)} className="md:hidden rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
+              Filtros
             </button>
             <div className={`${showFilters ? "flex" : "hidden"} md:flex flex-wrap items-center gap-2 w-full md:w-auto`}>
-              <select value={mod} onChange={e => setMod(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+              <select value={mod} onChange={e => setMod(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
-              <select value={prio} onChange={e => setPrio(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+              <select value={prio} onChange={e => setPrio(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 <option value="Todas">Prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
               </select>
-              <select value={phase} onChange={e => setPhase(e.target.value)} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs outline-none">
+              <select value={phase} onChange={e => setPhase(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
               </select>
-              {isAdmin && (
+              {appIsAdmin && (
                 <>
-                  <button onClick={() => setShowAdd(true)} className="rounded-lg bg-slate-900 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 transition-colors">+</button>
-                  <button onClick={() => setDeleteMode(!deleteMode)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${deleteMode ? "bg-red-500 text-white border-red-500" : "border-slate-200 text-slate-600 hover:bg-slate-50"}`}>🗑️</button>
+                  <button onClick={() => openAddTask()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"><Plus className="h-4 w-4" /></button>
+                  <button onClick={() => setDeleteMode(!deleteMode)} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}><Trash2 className="h-4 w-4" /></button>
                 </>
               )}
             </div>
           </div>
 
-          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
-            {columns.map(({ status, items }) => (
-              <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={isAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} />
-            ))}
-          </div>
+          {viewMode === "list" ? (
+            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="grid grid-cols-[1fr_140px_120px_120px_90px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase text-slate-400">
+                <span>Tarea</span>
+                <span>Módulo</span>
+                <span>Estado</span>
+                <span>Prioridad</span>
+                <span>Esfuerzo</span>
+              </div>
+              <div className="divide-y divide-slate-100">
+                {displayedTasks.map(task => {
+                  const S = statusMeta[task.status]?.icon || Circle;
+                  const P = priorityMeta[task.priority]?.icon || Flag;
+                  return (
+                    <button key={task.id} onClick={() => setDetailT(task)} className="grid w-full grid-cols-[1fr_140px_120px_120px_90px] gap-3 px-4 py-3 text-left text-sm hover:bg-slate-50">
+                      <span className="min-w-0">
+                        <span className="block truncate font-bold text-slate-900">{task.title}</span>
+                        <span className="block truncate text-xs text-slate-400">{task.description || "Sin descripción"}</span>
+                      </span>
+                      <span className="truncate text-slate-600">{task.module}</span>
+                      <span className="flex items-center gap-1.5 font-semibold text-slate-600"><S className="h-4 w-4" />{task.status}</span>
+                      <span className="flex items-center gap-1.5 font-semibold text-slate-600"><P className="h-4 w-4" />{task.priority}</span>
+                      <span className="text-slate-500">{task.effort}</span>
+                    </button>
+                  );
+                })}
+                {displayedTasks.length === 0 && (
+                  <div className="px-4 py-10 text-center text-sm font-semibold text-slate-400">No hay tareas con estos filtros.</div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
+              {columns.map(({ status, items }) => (
+                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -934,14 +1424,14 @@ export default function NoraHRKanban() {
         {editT && <TaskForm onSave={editTask} onClose={() => setEditT(null)} initial={editT} users={users} />}
       </Modal>
 
-      <Modal open={!!detailT} onClose={() => setDetailT(null)}>
+      <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={isAdmin} activeBoardId={activeBoardId} users={users} />}
+          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} />}
         </ErrorBoundary>
       </Modal>
 
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
-        <AdminPanel users={users} currentUser={user} onClose={() => setShowAdmin(false)} />
+        <AdminPanel users={users} currentUser={appUser} onClose={() => setShowAdmin(false)} />
       </Modal>
 
       <DragOverlay>
@@ -959,7 +1449,7 @@ export default function NoraHRKanban() {
     >
       {sidebarOpen ? "▶" : "◀"}
     </button>
-    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onQuickAction={handleSidebarAction} />
     </>
   );
 }
