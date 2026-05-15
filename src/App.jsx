@@ -110,9 +110,11 @@ function SortableCard({ task, onSelect, isAdmin, userMap }) {
         <span className="truncate">{task.description}</span>
       </div>
       {task.assignedName && (
-        <div className="mt-1.5 flex items-center gap-1 text-[11px] text-slate-500">
-          <span>👤</span>
-          <span className="truncate">{task.assignedName}</span>
+        <div className="mt-1.5 flex items-center gap-1.5">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-200 text-[10px] font-semibold text-slate-600 shrink-0">
+            {task.assignedName.charAt(0).toUpperCase()}
+          </span>
+          <span className="text-[11px] text-slate-500 truncate">{task.assignedName}</span>
         </div>
       )}
       {task.dueDate && (
@@ -173,7 +175,7 @@ function TaskForm({ onSave, onClose, initial, users }) {
   );
 }
 
-function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId }) {
+function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users }) {
   const [logs, setLogs] = useState([]);
   const statusOrder = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
   const currentIdx = statusOrder.indexOf(task.status);
@@ -233,17 +235,58 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
       </div>
       <h2 className="text-xl font-bold text-slate-900">{task.title}</h2>
       <p className="text-sm leading-6 text-slate-500">{task.description || "Sin descripción"}</p>
-      <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-50 p-4">
-        <div><span className="text-xs font-medium text-slate-400">Estado</span><p className="text-sm font-semibold text-slate-700">{task.status === "Hecho" ? "✅" : task.status === "En progreso" ? "⏳" : task.status === "Bloqueado" ? "⚠️" : "○"} {task.status}</p></div>
-        <div><span className="text-xs font-medium text-slate-400">Prioridad</span><p className="text-sm font-semibold text-slate-700">{task.priority}</p></div>
-        <div><span className="text-xs font-medium text-slate-400">Fase</span><p className="text-sm font-semibold text-slate-700">{task.phase} - {phaseMap[task.phase]}</p></div>
-        <div><span className="text-xs font-medium text-slate-400">Esfuerzo</span><p className="text-sm font-semibold text-slate-700">{effortLabels[task.effort]}</p></div>
-        <div><span className="text-xs font-medium text-slate-400">Asignado a</span><p className="text-sm font-semibold text-slate-700">{task.assignedName || "—"}</p></div>
-        <div><span className="text-xs font-medium text-slate-400">Fecha límite</span><p className="text-sm font-semibold text-slate-700">{task.dueDate ? (() => {
-          const days = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-          const icon = days < 0 ? "🔴" : days <= 3 ? "🟡" : "🟢";
-          return `${icon} ${new Date(task.dueDate).toLocaleDateString()}`;
-        })() : "—"}</p></div>
+      <div className="rounded-xl bg-slate-50 p-4 space-y-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Estado</span>
+          <span className="text-sm font-semibold text-slate-700">{task.status === "Hecho" ? "✅" : task.status === "En progreso" ? "⏳" : task.status === "Bloqueado" ? "⚠️" : "○"} {task.status}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Prioridad</span>
+          <span className={`text-sm font-semibold ${task.priority === "Alta" ? "text-red-600" : task.priority === "Media" ? "text-amber-600" : "text-slate-500"}`}>{task.priority}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Fase</span>
+          <span className={`rounded-md border px-2 py-0.5 text-xs font-medium ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase} - {phaseMap[task.phase]}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Esfuerzo</span>
+          <span className="text-sm font-semibold text-slate-700">{effortLabels[task.effort]}</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Asignado a</span>
+          {isAdmin && users?.length > 0 ? (
+            <select
+              value={task.assignedTo || ""}
+              onChange={async (e) => {
+                const userId = e.target.value;
+                const u = users.find(uu => uu.id === userId);
+                try {
+                  await updateDoc(doc(db, "boards", activeBoardId, "tasks", task.id), {
+                    assignedTo: userId,
+                    assignedName: u ? u.name : "",
+                    updatedAt: serverTimestamp(),
+                  });
+                } catch (err) {
+                  console.error("Error assigning task:", err);
+                }
+              }}
+              className="text-right text-sm font-semibold text-slate-700 bg-transparent border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-slate-400 cursor-pointer max-w-[160px]"
+            >
+              <option value="">Sin asignar</option>
+              {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          ) : (
+            <p className="text-sm font-semibold text-slate-700">{task.assignedName || "—"}</p>
+          )}
+        </div>
+        <div className="flex items-center justify-between">
+          <span className="text-xs font-medium text-slate-400">Fecha límite</span>
+          <p className="text-sm font-semibold text-slate-700">{task.dueDate ? (() => {
+            const days = Math.ceil((new Date(task.dueDate) - new Date()) / (1000 * 60 * 60 * 24));
+            const icon = days < 0 ? "🔴" : days <= 3 ? "🟡" : "🟢";
+            return `${icon} ${new Date(task.dueDate).toLocaleDateString()}`;
+          })() : "—"}</p>
+        </div>
       </div>
       {availableStatuses.length > 0 && (
         <div className="flex flex-wrap gap-2">
@@ -864,7 +907,7 @@ export default function NoraHRKanban() {
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)}>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={isAdmin} activeBoardId={activeBoardId} />}
+          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={isAdmin} activeBoardId={activeBoardId} users={users} />}
         </ErrorBoundary>
       </Modal>
 

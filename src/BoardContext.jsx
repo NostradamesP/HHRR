@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, getDocs, query, orderBy, where, serverTimestamp } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 
@@ -46,13 +46,21 @@ export function BoardProvider({ children }) {
   useEffect(() => {
     if (!user || boards.length > 0 || !loading || autoCreated.current) return;
     autoCreated.current = true;
-    addDoc(collection(db, "boards"), {
-      name: "NoraHR Roadmap",
-      createdBy: user.uid,
-      createdAt: serverTimestamp(),
-    }).then(ref => {
-      localStorage.setItem("activeBoardId", ref.id);
-      setActiveBoardId(ref.id);
+    getDocs(query(collection(db, "boards"), where("name", "==", "NoraHR Roadmap"))).then(snap => {
+      if (!snap.empty) {
+        const existing = snap.docs[0];
+        localStorage.setItem("activeBoardId", existing.id);
+        setActiveBoardId(existing.id);
+        return;
+      }
+      addDoc(collection(db, "boards"), {
+        name: "NoraHR Roadmap",
+        createdBy: user.uid,
+        createdAt: serverTimestamp(),
+      }).then(ref => {
+        localStorage.setItem("activeBoardId", ref.id);
+        setActiveBoardId(ref.id);
+      });
     });
   }, [user, boards, loading]);
 

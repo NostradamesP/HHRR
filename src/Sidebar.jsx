@@ -14,23 +14,12 @@ const boardColors = [
 ];
 
 export default function Sidebar({ open, onClose }) {
-  const { boards, activeBoardId, switchBoard, createBoard } = useBoard();
+  const { boards, activeBoardId, switchBoard } = useBoard();
   const [search, setSearch] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState("");
 
   const filtered = boards.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase())
   );
-
-  async function handleCreate(e) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    await createBoard(name.trim());
-    setName("");
-    setShowForm(false);
-    onClose();
-  }
 
   return (
     <>
@@ -82,42 +71,6 @@ export default function Sidebar({ open, onClose }) {
                   </div>
                 </button>
               ))
-            )}
-          </div>
-          <div className="px-3 pb-2 shrink-0">
-            {showForm ? (
-              <form onSubmit={handleCreate} className="space-y-2 rounded-lg border border-slate-200 bg-slate-50 p-3">
-                <input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Nombre del board"
-                  autoFocus
-                  className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-slate-900 transition-colors"
-                />
-                <div className="flex gap-2">
-                  <button
-                    type="submit"
-                    disabled={!name.trim()}
-                    className="flex-1 rounded-lg bg-slate-900 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors"
-                  >
-                    Crear
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => { setShowForm(false); setName(""); }}
-                    className="flex-1 rounded-lg border border-slate-200 bg-white py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-50 transition-colors"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </form>
-            ) : (
-              <button
-                onClick={() => setShowForm(true)}
-                className="w-full rounded-lg border-2 border-dashed border-slate-200 py-2 text-xs font-medium text-slate-400 hover:border-slate-900 hover:text-slate-900 hover:bg-slate-50 transition-all"
-              >
-                + Nuevo board
-              </button>
             )}
           </div>
           <ChatPanel />
