@@ -22,8 +22,11 @@ import {
   MoreVertical,
   Pencil,
   Plus,
+  RefreshCw,
+  Save,
   Search,
   Send,
+  Server,
   Settings,
   SlidersHorizontal,
   Tag,
@@ -100,10 +103,70 @@ const modules = Object.keys(modColors);
 
 const effortWeight = { Alto: 3, Medio: 2, Bajo: 1 };
 
+const LOCAL_TASKS_KEY = "norahr.local.tasks";
+const LOCAL_COMMENTS_KEY = "norahr.local.comments";
+const LOCAL_IT_CONFIG_KEY = "norahr.local.itConfig";
+const LOCAL_LOGS_KEY = "norahr.local.logs";
+
+const defaultItConfig = {
+  systems: ["Network", "Microsoft 365", "Active Directory", "Firewall", "Endpoints", "ERP"],
+  ticketTypes: ["Incidente", "Cambio", "Mantenimiento", "Acceso", "Proyecto"],
+  impacts: ["Bajo", "Medio", "Alto", "Crítico"],
+  urgencies: ["Baja", "Media", "Alta", "Crítica"],
+  team: ["Demo NoraHR", "IT Manager", "Soporte Nivel 1", "Infraestructura"],
+};
+
+function readLocalJSON(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLocalJSON(key, value) {
+  localStorage.setItem(key, JSON.stringify(value));
+}
+
+function makeChecklist(title) {
+  return [
+    { id: "scope", text: "Validar alcance", done: false },
+    { id: "execute", text: title?.toLowerCase().includes("research") ? "Documentar hallazgos" : "Ejecutar trabajo técnico", done: false },
+    { id: "verify", text: "Verificar y cerrar", done: false },
+  ];
+}
+
+function enrichLocalTask(task, idx, config = defaultItConfig) {
+  return {
+    ...task,
+    id: String(task.id),
+    order: task.order ?? idx,
+    dueDate: task.dueDate || "",
+    archived: Boolean(task.archived),
+    assignedTo: task.assignedTo || (idx % 3 === 0 ? "local-demo-user" : ""),
+    assignedName: task.assignedName || (idx % 3 === 0 ? "Demo NoraHR" : ""),
+    ticketType: task.ticketType || config.ticketTypes[idx % config.ticketTypes.length],
+    requester: task.requester || "Operaciones IT",
+    system: task.system || config.systems[idx % config.systems.length],
+    impact: task.impact || (task.priority === "Alta" ? "Alto" : "Medio"),
+    urgency: task.urgency || (task.priority === "Alta" ? "Alta" : "Media"),
+    slaHours: task.slaHours || (task.priority === "Alta" ? 24 : 72),
+    checklist: Array.isArray(task.checklist) && task.checklist.length ? task.checklist : makeChecklist(task.title),
+  };
+}
+
+function checklistProgress(task) {
+  const items = Array.isArray(task.checklist) ? task.checklist : [];
+  if (!items.length) return { done: 0, total: 0, pct: 0 };
+  const done = items.filter(i => i.done).length;
+  return { done, total: items.length, pct: Math.round((done / items.length) * 100) };
+}
+
 function filterTasks(tasks, q, mod, prio, ph) {
   const cq = q.trim().toLowerCase();
   return tasks.filter(t => {
-    const st = [t.title, t.module, t.phase, t.priority, t.description].join(" ").toLowerCase();
+    const st = [t.title, t.module, t.phase, t.priority, t.description, t.system, t.ticketType, t.requester, t.impact, t.urgency].join(" ").toLowerCase();
     return (cq === "" || st.includes(cq)) && (mod === "Todos" || t.module === mod) && (prio === "Todas" || t.priority === prio) && (ph === "Todas" || t.phase === ph);
   });
 }
@@ -151,16 +214,25 @@ function DroppableZone({ status }) {
   );
 }
 
-function CardContent({ task }) {
+function CardContent({ task, onTaskPatch, isAdmin }) {
   const meta = priorityMeta[task.priority] || priorityMeta.Media;
   const PriorityIcon = meta.icon;
+  const checklist = checklistProgress(task);
+  const overdue = task.dueDate && new Date(task.dueDate) < new Date();
+  const isBlocked = task.status === "Bloqueado";
+  const isCritical = task.urgency === "Crítica";
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-1.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="min-w-0 flex-1 pr-7 text-[13px] font-semibold leading-snug text-slate-900">{task.title}</h3>
+        <h3 className="min-w-0 flex-1 pr-7 text-[12px] font-semibold leading-snug text-slate-900">
+          {task.title}
+          {isBlocked && <span className="ml-2 inline-flex items-center gap-1 rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700"><Lock className="h-3 w-3" />Bloqueado</span>}
+        </h3>
       </div>
-      {task.description && <p className="line-clamp-2 text-[10px] leading-5 text-slate-500">{task.description}</p>}
+      {task.description && <p className="line-clamp-1 text-[10px] leading-4 text-slate-500">{task.description}</p>}
       <div className="flex flex-wrap items-center gap-1.5">
+        {task.system && <FieldPill icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system}</FieldPill>}
+        {task.ticketType && <FieldPill className="border-slate-200 bg-slate-50 text-slate-600">{task.ticketType}</FieldPill>}
         <FieldPill icon={Tag} className={`${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
           {task.module}
         </FieldPill>
@@ -170,43 +242,71 @@ function CardContent({ task }) {
         <FieldPill icon={PriorityIcon} className={`${meta.tone}`}>
           {meta.label}
         </FieldPill>
+        {isCritical && <FieldPill icon={Flame} className="border-red-200 bg-red-50 text-red-700">Crítica</FieldPill>}
       </div>
-      <div className="flex items-center justify-between gap-2 pt-1">
+      <div className="flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400">
           <Gauge className="h-3.5 w-3.5" />
           <span>{task.effort}</span>
+          {checklist.total > 0 && (
+            <span className="inline-flex items-center gap-1 text-slate-500">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {checklist.done}/{checklist.total}
+            </span>
+          )}
+          {isAdmin && (
+            <button onClick={(e) => { e.stopPropagation(); const t = prompt("Nuevo item de checklist"); if (t?.trim()) onTaskPatch?.(task.id, { checklist: [...(task.checklist || []), { id: `check-${Date.now()}`, text: t.trim(), done: false }] }); }}
+              className="inline-flex h-4 w-4 items-center justify-center rounded text-slate-400 hover:bg-slate-100 hover:text-slate-600" title="Agregar item">
+              <Plus className="h-3 w-3" />
+            </button>
+          )}
+          {task.slaHours && <span>SLA {task.slaHours}h</span>}
           {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         </div>
-        {task.assignedName ? (
-          <Avatar name={task.assignedName} />
-        ) : (
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-300">
-            <User className="h-3.5 w-3.5" />
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {task.assignedName ? (
+            <>
+              <Avatar name={task.assignedName} />
+              <span className="max-w-[80px] truncate text-[10px] font-medium text-slate-600">{task.assignedName}</span>
+            </>
+          ) : (
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-300">
+              <User className="h-3 w-3" />
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
+function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal }) {
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
+  const overdue = task.dueDate && new Date(task.dueDate) < new Date();
+  const isBlocked = task.status === "Bloqueado";
+  const isCritical = task.urgency === "Crítica";
+
+  let borderClass = "";
+  if (isBlocked) borderClass = "border-l-4 border-l-red-500";
+  else if (overdue) borderClass = "border-l-4 border-l-orange-400";
+  else if (isCritical) borderClass = "border-l-4 border-l-rose-400";
+
   return (
-    <div ref={setNodeRef} style={s}
+    <div ref={setNodeRef} style={s} {...listeners}
       onClick={(deleteMode ? undefined : () => onSelect(task))}
-      className={`group relative rounded-lg border border-slate-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
+      className={`group relative rounded-lg border border-slate-200/80 bg-white p-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
       {isAdmin && !deleteMode && (
         <button
           type="button"
           aria-label="Arrastrar tarea"
+          ref={setActivatorNodeRef}
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+          className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
           {...attributes}
-          {...listeners}
         >
-          <MoreVertical className="h-4 w-4" />
+          <MoreVertical className="h-3.5 w-3.5" />
         </button>
       )}
       {deleteMode && isAdmin && (
@@ -217,12 +317,12 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }
           <X className="h-3.5 w-3.5" />
         </button>
       )}
-      <CardContent task={task} />
+      <CardContent task={task} onTaskPatch={onTaskPatch} isAdmin={isAdmin} />
     </div>
   );
 }
 
-function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd }) {
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal }) {
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
   const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
@@ -231,8 +331,8 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
   const StatusIcon = colAccents.icon;
 
   return (
-    <div className="min-w-[292px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm md:min-w-0">
-      <div className="flex items-center justify-between px-3 py-3">
+    <div className="min-w-[260px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm md:min-w-0">
+      <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
           <button onClick={() => toggleCollapse(status)} className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700">
             {collapsed[status] ? <ChevronRight className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
@@ -266,10 +366,10 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
             </div>
           </div>
         )}
-        <div className="p-2.5">
+        <div className="p-1.5">
           <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-2.5">
-              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} />)}
+            <div className="space-y-1.5">
+              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} />)}
               {isAdmin && <DroppableZone status={status} />}
             </div>
           </SortableContext>
@@ -281,9 +381,10 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
 
 function DueDateBadge({ dueDate }) {
   const days = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
-  const color = days < 0 ? "text-red-500" : days <= 3 ? "text-amber-500" : "text-emerald-500";
+  const isOverdue = days < 0;
+  const color = isOverdue ? "text-red-600 bg-red-50 border-red-200" : days <= 3 ? "text-amber-600 bg-amber-50 border-amber-200" : "text-emerald-600 bg-emerald-50 border-emerald-200";
   const label = days < 0 ? `Vencida` : days === 0 ? `Hoy` : days === 1 ? `Mañana` : days > 30 ? `> 30 días` : `${days} días`;
-  return <span className={`inline-flex items-center gap-1 font-medium ${color}`}><Calendar className="h-3.5 w-3.5" />{label}</span>;
+  return <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${color}`}>{isOverdue ? <Flame className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}{label}</span>;
 }
 
 function Modal({ open, onClose, children, wide = false }) {
@@ -298,9 +399,43 @@ function Modal({ open, onClose, children, wide = false }) {
   );
 }
 
-function TaskForm({ onSave, onClose, initial, users }) {
+function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig, isLocal = false }) {
   const { isAdmin } = useAuth();
-  const [f, setF] = useState(initial || { title: "", module: modules[0], phase: "V1", priority: "Media", effort: "Medio", description: "", assignedTo: "", assignedName: "", dueDate: "" });
+  const [f, setF] = useState(initial || {
+    title: "",
+    module: modules[0],
+    phase: "V1",
+    priority: "Media",
+    effort: "Medio",
+    description: "",
+    assignedTo: "",
+    assignedName: "",
+    dueDate: "",
+    ticketType: itConfig.ticketTypes[0] || "",
+    requester: "Operaciones IT",
+    system: itConfig.systems[0] || "",
+    impact: "Medio",
+    urgency: "Media",
+    slaHours: 72,
+    checklist: makeChecklist("Nueva tarea"),
+  });
+  const [newCheckItem, setNewCheckItem] = useState("");
+
+  function addCheckItem() {
+    const text = newCheckItem.trim();
+    if (!text) return;
+    setF({ ...f, checklist: [...(f.checklist || []), { id: `check-${Date.now()}`, text, done: false }] });
+    setNewCheckItem("");
+  }
+
+  function updateChecklistItem(id, patch) {
+    setF({ ...f, checklist: (f.checklist || []).map(item => item.id === id ? { ...item, ...patch } : item) });
+  }
+
+  function removeChecklistItem(id) {
+    setF({ ...f, checklist: (f.checklist || []).filter(item => item.id !== id) });
+  }
+
   return (
     <div className="space-y-4">
       <h2 className="text-lg font-bold text-slate-900">{initial ? "Editar tarea" : "Nueva tarea"}</h2>
@@ -313,6 +448,63 @@ function TaskForm({ onSave, onClose, initial, users }) {
         <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900"><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select>
       </div>
       <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+      {isLocal && (
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
+          <h3 className="text-xs font-black uppercase text-slate-400">Campos IT</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <select value={f.system || ""} onChange={e => setF({ ...f, system: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+              {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <select value={f.ticketType || ""} onChange={e => setF({ ...f, ticketType: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+              {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
+            </select>
+            <input value={f.requester || ""} onChange={e => setF({ ...f, requester: e.target.value })} placeholder="Solicitante" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
+            <input value={f.slaHours || ""} onChange={e => setF({ ...f, slaHours: Number(e.target.value) || "" })} type="number" min="1" placeholder="SLA horas" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
+            <select value={f.assignedName || ""} onChange={e => setF({ ...f, assignedTo: e.target.value ? `local-${e.target.value}` : "", assignedName: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+              <option value="">Sin asignar</option>
+              {itConfig.team.map(v => <option key={v} value={v}>Asignar: {v}</option>)}
+            </select>
+            <select value={f.impact || ""} onChange={e => setF({ ...f, impact: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+              {itConfig.impacts.map(v => <option key={v} value={v}>Impacto: {v}</option>)}
+            </select>
+            <select value={f.urgency || ""} onChange={e => setF({ ...f, urgency: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+              {itConfig.urgencies.map(v => <option key={v} value={v}>Urgencia: {v}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <h4 className="text-xs font-black uppercase text-slate-400">Checklist</h4>
+            {(f.checklist || []).map(item => (
+              <div key={item.id} className="flex items-center gap-2">
+                <input type="checkbox" checked={!!item.done} onChange={e => updateChecklistItem(item.id, { done: e.target.checked })} />
+                <input value={item.text} onChange={e => updateChecklistItem(item.id, { text: e.target.value })} className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400" />
+                <button type="button" onClick={() => removeChecklistItem(item.id)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"><X className="h-3.5 w-3.5" /></button>
+              </div>
+            ))}
+            <div className="flex gap-2">
+              <input value={newCheckItem} onChange={e => setNewCheckItem(e.target.value)} onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addCheckItem(); } }} placeholder="Agregar item de checklist" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400" />
+              <button type="button" onClick={addCheckItem} className="rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white">Agregar</button>
+        </div>
+      </div>
+      {isAdmin && Array.isArray(task.checklist) && task.checklist.length > 0 && (
+        <div className="space-y-0.5 border-t border-slate-100 pt-1">
+          {task.checklist.slice(0, 3).map(item => (
+            <button key={item.id}
+              onClick={(e) => { e.stopPropagation(); onTaskPatch?.(task.id, { checklist: (task.checklist || []).map(i => i.id === item.id ? { ...i, done: !i.done } : i) }); }}
+              className="flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left text-[10px] transition-colors hover:bg-slate-50"
+            >
+              <span className={`flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded border ${item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300"}`}>
+                {item.done && <CheckCircle2 className="h-2.5 w-2.5" />}
+              </span>
+              <span className={`truncate ${item.done ? "text-slate-400 line-through" : "text-slate-600"}`}>{item.text}</span>
+            </button>
+          ))}
+          {task.checklist.length > 3 && (
+            <p className="px-1 text-[10px] text-slate-400">+{task.checklist.length - 3} más</p>
+          )}
+        </div>
+      )}
+    </div>
+      )}
       {isAdmin && users.length > 0 && (
         <select value={f.assignedTo} onChange={e => {
           const u = users.find(u => u.id === e.target.value);
@@ -330,7 +522,7 @@ function TaskForm({ onSave, onClose, initial, users }) {
   );
 }
 
-function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users }) {
+function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false }) {
   const [logs, setLogs] = useState([]);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -354,7 +546,37 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
         return targetIdx > currentIdx && s !== "Bloqueado";
       });
 
+  const slaCompliance = useMemo(() => {
+    if (!task.slaHours || !task.dueDate) return null;
+    const now = new Date();
+    const due = new Date(task.dueDate);
+    const diffMs = due - now;
+    const diffHours = diffMs / (1000 * 60 * 60);
+    const totalSla = task.slaHours;
+    const remainingPct = Math.round((diffHours / totalSla) * 100);
+    if (task.status === "Hecho") return { status: "completado", label: "Completado", color: "text-emerald-600 bg-emerald-50 border-emerald-200" };
+    if (diffMs < 0) return { status: "vencido", label: "Vencido", color: "text-red-600 bg-red-50 border-red-200", remainingPct: 0 };
+    if (remainingPct <= 25) return { status: "por-vencer", label: "Por vencer", color: "text-amber-600 bg-amber-50 border-amber-200", remainingPct };
+    return { status: "en-plazo", label: "En plazo", color: "text-emerald-600 bg-emerald-50 border-emerald-200", remainingPct };
+  }, [task.slaHours, task.dueDate, task.status]);
+
+  function InlineField({ label, children }) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+        <p className="text-[10px] font-black uppercase text-slate-400">{label}</p>
+        {children}
+      </div>
+    );
+  }
+
   useEffect(() => {
+    if (!activeBoardId && task.id) {
+      const allLogs = readLocalJSON(LOCAL_LOGS_KEY, {});
+      setLogs(allLogs[task.id] || []);
+      const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
+      setComments(all[task.id] || []);
+      return;
+    }
     if (!activeBoardId) return;
     const q = query(
       collection(db, "boards", activeBoardId, "logs"),
@@ -371,17 +593,18 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
   }, [task.id, activeBoardId]);
 
   useEffect(() => {
-    if (!activeBoardId || !task.id) return;
-    const q = query(
-      collection(db, "boards", activeBoardId, "tasks", task.id, "comments"),
-      orderBy("createdAt", "asc")
-    );
-    const unsub = onSnapshot(q, (snap) => {
-      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Comments listener error:", err);
-    });
-    return unsub;
+    if (activeBoardId && task.id) {
+      const q = query(
+        collection(db, "boards", activeBoardId, "tasks", task.id, "comments"),
+        orderBy("createdAt", "asc")
+      );
+      const unsub = onSnapshot(q, (snap) => {
+        setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }, (err) => {
+        console.error("Comments listener error:", err);
+      });
+      return unsub;
+    }
   }, [task.id, activeBoardId]);
 
   async function sendComment(e) {
@@ -389,13 +612,17 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     const text = commentText.trim();
     if (!text || !detailUser) return;
     if (!activeBoardId) {
-      setComments(prev => [...prev, {
+      const nextComment = {
         id: `local-comment-${Date.now()}`,
         text,
         userId: detailUser.uid,
         userName: detailUserData?.name || detailUser.email,
         createdAt: new Date().toISOString(),
-      }]);
+      };
+      const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
+      const next = { ...all, [task.id]: [...(all[task.id] || []), nextComment] };
+      writeLocalJSON(LOCAL_COMMENTS_KEY, next);
+      setComments(next[task.id]);
       setCommentText("");
       return;
     }
@@ -439,6 +666,22 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     onClose();
   }
 
+  function patchChecklist(checklist) {
+    onTaskPatch?.(task.id, { checklist });
+  }
+
+  function toggleCheckItem(id) {
+    patchChecklist((task.checklist || []).map(item => item.id === id ? { ...item, done: !item.done } : item));
+  }
+
+  function addChecklistItem() {
+    const text = prompt("Nuevo item de checklist");
+    if (!text?.trim()) return;
+    patchChecklist([...(task.checklist || []), { id: `check-${Date.now()}`, text: text.trim(), done: false }]);
+  }
+
+  const checklist = checklistProgress(task);
+
   return (
     <div className="flex h-[88vh] min-h-[560px] flex-col overflow-hidden rounded-2xl bg-white text-slate-900">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-3">
@@ -475,9 +718,71 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <FieldPill icon={PriorityIcon} className={priority.tone}>{task.priority}</FieldPill>
+                  {isLocal ? (
+                    <>
+                      <select value={task.system || ""} onChange={e => onTaskPatch?.(task.id, { system: e.target.value })}
+                        className="rounded-md border border-cyan-100 bg-cyan-50 px-2 py-1 text-[10px] font-medium text-cyan-700 outline-none">
+                        {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                      <select value={task.ticketType || ""} onChange={e => onTaskPatch?.(task.id, { ticketType: e.target.value })}
+                        className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 outline-none">
+                        {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    </>
+                  ) : (
+                    <>
+                      <FieldPill icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system || "Sistema sin definir"}</FieldPill>
+                      <FieldPill className="border-slate-200 bg-slate-50 text-slate-600">{task.ticketType || "Tipo sin definir"}</FieldPill>
+                    </>
+                  )}
                   <FieldPill icon={Tag} className={`${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>{task.module}</FieldPill>
                   <FieldPill className={`${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase} - {phaseMap[task.phase]}</FieldPill>
                   <FieldPill icon={Gauge} className="border-slate-200 bg-slate-50 text-slate-600">{task.effort}</FieldPill>
+                </div>
+                <div className="grid gap-3 md:grid-cols-4">
+                  {isLocal ? (
+                    <>
+                      <InlineField label="Solicitante">
+                        <input value={task.requester || ""} onChange={e => onTaskPatch?.(task.id, { requester: e.target.value })}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400" />
+                      </InlineField>
+                      <InlineField label="Impacto">
+                        <select value={task.impact || ""} onChange={e => onTaskPatch?.(task.id, { impact: e.target.value })}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400">
+                          {itConfig.impacts.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </InlineField>
+                      <InlineField label="Urgencia">
+                        <select value={task.urgency || ""} onChange={e => onTaskPatch?.(task.id, { urgency: e.target.value })}
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400">
+                          {itConfig.urgencies.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      </InlineField>
+                      <InlineField label="SLA">
+                        <input value={task.slaHours || ""} onChange={e => onTaskPatch?.(task.id, { slaHours: Number(e.target.value) || "" })}
+                          type="number" min="1" placeholder="Horas"
+                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400" />
+                        {slaCompliance && (
+                          <span className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${slaCompliance.color}`}>
+                            {slaCompliance.label}
+                          </span>
+                        )}
+                      </InlineField>
+                    </>
+                  ) : (
+                    <>
+                      {[
+                        ["Solicitante", task.requester || "Sin definir"],
+                        ["Impacto", task.impact || "Sin definir"],
+                        ["Urgencia", task.urgency || "Sin definir"],
+                        ["SLA", task.slaHours ? `${task.slaHours}h` : "Sin definir"],
+                      ].map(([label, value]) => (
+                        <InlineField key={label} label={label}>
+                          <p className="mt-1 truncate text-xs font-bold text-slate-700">{value}</p>
+                        </InlineField>
+                      ))}
+                    </>
+                  )}
                 </div>
                 <div className="rounded-xl border border-slate-200">
                   <div className="border-b border-slate-200 px-4 py-3">
@@ -493,7 +798,19 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                   <Users className="h-4 w-4 text-slate-300" />
                 </div>
                 <div className="p-5">
-                  {isAdmin && users?.length > 0 ? (
+                  {isLocal ? (
+                    <select
+                      value={task.assignedName || ""}
+                      onChange={e => {
+                        const name = e.target.value;
+                        onTaskPatch?.(task.id, { assignedName: name, assignedTo: name ? `local-${name}` : "" });
+                      }}
+                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400"
+                    >
+                      <option value="">Sin asignar</option>
+                      {itConfig.team.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  ) : isAdmin && users?.length > 0 ? (
                     <select
                       value={task.assignedTo || ""}
                       onChange={async (e) => {
@@ -520,6 +837,27 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                       <span className="text-sm font-semibold text-slate-700">{task.assignedName || "Sin asignar"}</span>
                     </div>
                   )}
+                </div>
+              </section>
+
+              <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900">Checklist</h3>
+                    <p className="text-xs text-slate-400">{checklist.done}/{checklist.total} completado</p>
+                  </div>
+                  {isLocal && <button onClick={addChecklistItem} className="flex h-8 items-center gap-1 rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white"><Plus className="h-3.5 w-3.5" />Item</button>}
+                </div>
+                <div className="space-y-2 p-5">
+                  {(task.checklist || []).map(item => (
+                    <button key={item.id} onClick={() => isLocal && toggleCheckItem(item.id)} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50">
+                      <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                      </span>
+                      <span className={`text-sm font-semibold ${item.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{item.text}</span>
+                    </button>
+                  ))}
+                  {(!task.checklist || task.checklist.length === 0) && <p className="text-sm text-slate-400">Sin checklist todavía.</p>}
                 </div>
               </section>
 
@@ -635,6 +973,19 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                     <p className="text-xs font-bold uppercase text-slate-400">Esfuerzo</p>
                     <p className="mt-2 text-sm font-semibold text-slate-800">{task.effort}</p>
                   </div>
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">SLA</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.slaHours ? `${task.slaHours} horas` : "Sin definir"}</p>
+                    {slaCompliance && (
+                      <span className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${slaCompliance.color}`}>
+                        {slaCompliance.label}
+                      </span>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-slate-200 p-4">
+                    <p className="text-xs font-bold uppercase text-slate-400">Checklist</p>
+                    <p className="mt-2 text-sm font-semibold text-slate-800">{checklist.done}/{checklist.total} completado</p>
+                  </div>
                 </div>
               </section>
             </div>
@@ -718,6 +1069,56 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
             )}
           </div>
         </aside>
+      </div>
+    </div>
+  );
+}
+
+function ITConfigPanel({ config, onSave, onReset, onClose }) {
+  const [draft, setDraft] = useState(config);
+
+  function updateList(key, value) {
+    setDraft({ ...draft, [key]: value.split("\n").map(v => v.trim()).filter(Boolean) });
+  }
+
+  const sections = [
+    ["systems", "Sistemas"],
+    ["ticketTypes", "Tipos de tarea"],
+    ["impacts", "Impacto"],
+    ["urgencies", "Urgencia"],
+    ["team", "Equipo"],
+  ];
+
+  return (
+    <div className="space-y-5">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-black text-slate-950">Configuración IT</h2>
+          <p className="text-sm text-slate-400">Catálogos locales para el kanban corporativo de IT.</p>
+        </div>
+        <button onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"><X className="h-4 w-4" /></button>
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        {sections.map(([key, label]) => (
+          <label key={key} className="space-y-2">
+            <span className="text-xs font-black uppercase text-slate-400">{label}</span>
+            <textarea
+              value={(draft[key] || []).join("\n")}
+              onChange={e => updateList(key, e.target.value)}
+              className="h-32 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm outline-none focus:border-cyan-400"
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <button onClick={() => { onSave(draft); onClose(); }} className="flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2 text-sm font-bold text-white hover:bg-cyan-700">
+          <Save className="h-4 w-4" /> Guardar configuración
+        </button>
+        <button onClick={onReset} className="flex items-center gap-2 rounded-xl border border-slate-200 px-4 py-2 text-sm font-bold text-slate-600 hover:bg-slate-50">
+          <RefreshCw className="h-4 w-4" /> Reset demo local
+        </button>
       </div>
     </div>
   );
@@ -868,6 +1269,10 @@ export default function NoraHRKanban() {
   const [mod, setMod] = useState("Todos");
   const [prio, setPrio] = useState("Todas");
   const [phase, setPhase] = useState("Todas");
+  const [systemFilter, setSystemFilter] = useState("Todos");
+  const [typeFilter, setTypeFilter] = useState("Todos");
+  const [slaFilter, setSlaFilter] = useState("Todos");
+  const [responsibleFilter, setResponsibleFilter] = useState("Todos");
   const [showAdd, setShowAdd] = useState(false);
   const [newTaskStatus, setNewTaskStatus] = useState("Pendiente");
   const [editT, setEditT] = useState(null);
@@ -882,11 +1287,14 @@ export default function NoraHRKanban() {
   const [deleteMode, setDeleteMode] = useState(false);
   const [viewMode, setViewMode] = useState("board");
   const [myWorkOnly, setMyWorkOnly] = useState(false);
+  const [showItConfig, setShowItConfig] = useState(false);
+  const [itConfig, setItConfig] = useState(() => readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig));
   const [activeId, setActiveId] = useState(null);
   const activeTask = useMemo(() => tasks.find(t => t.id === activeId), [activeId, tasks]);
   const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(appBoards);
+  const localLoaded = useRef(false);
   boardsRef.current = appBoards;
 
   const sensors = useSensors(
@@ -896,15 +1304,12 @@ export default function NoraHRKanban() {
 
   useEffect(() => {
     if (isLocalDemo) {
-      setTasks(initialTasks.map((t, idx) => ({
-        ...t,
-        id: String(t.id),
-        order: idx,
-        dueDate: "",
-        archived: false,
-        assignedTo: idx % 3 === 0 ? "local-demo-user" : "",
-        assignedName: idx % 3 === 0 ? "Demo NoraHR" : "",
-      })));
+      const saved = readLocalJSON(LOCAL_TASKS_KEY, null);
+      const localTasks = Array.isArray(saved) && saved.length
+        ? saved.map((t, idx) => enrichLocalTask(t, idx, itConfig))
+        : initialTasks.map((t, idx) => enrichLocalTask(t, idx, itConfig));
+      setTasks(localTasks);
+      localLoaded.current = true;
       return;
     }
     if (!user || !activeBoardId) return;
@@ -955,6 +1360,16 @@ export default function NoraHRKanban() {
   }, [user, appIsAdmin, activeBoardId, isLocalDemo]);
 
   useEffect(() => {
+    if (!isLocalDemo || !localLoaded.current) return;
+    writeLocalJSON(LOCAL_TASKS_KEY, tasks);
+  }, [tasks, isLocalDemo]);
+
+  useEffect(() => {
+    if (!isLocalDemo) return;
+    writeLocalJSON(LOCAL_IT_CONFIG_KEY, itConfig);
+  }, [itConfig, isLocalDemo]);
+
+  useEffect(() => {
     if (isLocalDemo) {
       setUsers([]);
       return;
@@ -1001,13 +1416,23 @@ export default function NoraHRKanban() {
     if (myWorkOnly) {
       ts = ts.filter(t => t.assignedTo === appUser?.uid || t.assignedName === appUserData?.name);
     }
+    if (systemFilter !== "Todos") ts = ts.filter(t => t.system === systemFilter);
+    if (typeFilter !== "Todos") ts = ts.filter(t => t.ticketType === typeFilter);
+    if (responsibleFilter !== "Todos") ts = ts.filter(t => t.assignedName === responsibleFilter);
+    if (slaFilter === "Con SLA") ts = ts.filter(t => t.slaHours);
+    if (slaFilter === "Sin SLA") ts = ts.filter(t => !t.slaHours);
+    if (slaFilter === "Vencidas") {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      ts = ts.filter(t => t.dueDate && new Date(t.dueDate) < today);
+    }
     if (overdueOnly) {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       ts = ts.filter(t => t.dueDate && new Date(t.dueDate) < today);
     }
     return filterTasks(ts, searchQuery, mod, prio, phase);
-  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, appUser?.uid, appUserData?.name]);
+  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter]);
 
   const overdueCount = useMemo(() => {
     const today = new Date();
@@ -1046,11 +1471,27 @@ export default function NoraHRKanban() {
     }
   }
 
+  function createLocalLog(taskId, taskTitle, action, details) {
+    const all = readLocalJSON(LOCAL_LOGS_KEY, {});
+    const log = {
+      id: `local-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      action,
+      taskId,
+      taskTitle,
+      details: details || "",
+      userName: appUserData?.name || "Demo NoraHR",
+      createdAt: new Date().toISOString(),
+    };
+    all[taskId] = [...(all[taskId] || []), log];
+    writeLocalJSON(LOCAL_LOGS_KEY, all);
+  }
+
   async function archiveTask(id, archived) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, archived } : t));
+      createLocalLog(id, task.title, archived ? "archived" : "restored", "");
       return;
     }
     try {
@@ -1089,6 +1530,7 @@ export default function NoraHRKanban() {
     if (newStatus || isReorder) {
       if (isLocalDemo) {
         setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), order: Date.now() } : t));
+        if (newStatus) createLocalLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
         setActiveId(null);
         return;
       }
@@ -1109,6 +1551,7 @@ export default function NoraHRKanban() {
     if (!task) return;
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s, order: Date.now() } : t));
+      createLocalLog(id, task.title, "status_changed", `${task.status} → ${s}`);
       return;
     }
     try {
@@ -1123,6 +1566,7 @@ export default function NoraHRKanban() {
     const task = tasks.find(t => t.id === id);
     if (isLocalDemo) {
       setTasks(prev => prev.filter(t => t.id !== id));
+      if (task) createLocalLog(id, task.title, "deleted", "");
       return;
     }
     try {
@@ -1135,6 +1579,7 @@ export default function NoraHRKanban() {
 
   async function addTask(f) {
     if (isLocalDemo) {
+      const newId = `local-${Date.now()}`;
       setTasks(prev => [{
         title: f.title,
         module: f.module,
@@ -1148,8 +1593,16 @@ export default function NoraHRKanban() {
         archived: false,
         assignedTo: f.assignedTo || "",
         assignedName: f.assignedName || "",
-        id: `local-${Date.now()}`,
+        ticketType: f.ticketType || "",
+        requester: f.requester || "",
+        system: f.system || "",
+        impact: f.impact || "",
+        urgency: f.urgency || "",
+        slaHours: f.slaHours || "",
+        checklist: f.checklist || makeChecklist(f.title),
+        id: newId,
       }, ...prev]);
+      createLocalLog(newId, f.title, "created", "");
       setShowAdd(false);
       setNewTaskStatus("Pendiente");
       return;
@@ -1184,6 +1637,7 @@ export default function NoraHRKanban() {
     if (isLocalDemo) {
       const { id, ...data } = f;
       setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
+      createLocalLog(id, f.title, "updated", "");
       setEditT(null);
       return;
     }
@@ -1194,6 +1648,21 @@ export default function NoraHRKanban() {
       setEditT(null);
     } catch (e) {
       console.error("Error editing task:", e);
+    }
+  }
+
+  async function patchTask(id, patch) {
+    if (isLocalDemo) {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
+      setDetailT(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
+      const task = tasks.find(t => t.id === id);
+      if (task) createLocalLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
+      return;
+    }
+    try {
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { ...patch, updatedAt: serverTimestamp() });
+    } catch (e) {
+      console.error("Error patching task:", e);
     }
   }
 
@@ -1211,6 +1680,16 @@ export default function NoraHRKanban() {
     setShowAdd(true);
   }
 
+  function resetLocalDemo() {
+    if (!confirm("¿Resetear datos locales demo?")) return;
+    localStorage.removeItem(LOCAL_TASKS_KEY);
+    localStorage.removeItem(LOCAL_COMMENTS_KEY);
+    localStorage.removeItem(LOCAL_IT_CONFIG_KEY);
+    localStorage.removeItem(LOCAL_LOGS_KEY);
+    setItConfig(defaultItConfig);
+    setTasks(initialTasks.map((t, idx) => enrichLocalTask(t, idx, defaultItConfig)));
+  }
+
   function handleSidebarAction(action) {
     if (action === "all") {
       setMyWorkOnly(false);
@@ -1220,6 +1699,10 @@ export default function NoraHRKanban() {
       setMod("Todos");
       setPrio("Todas");
       setPhase("Todas");
+      setSystemFilter("Todos");
+      setTypeFilter("Todos");
+      setSlaFilter("Todos");
+      setResponsibleFilter("Todos");
       setViewMode("board");
     }
     if (action === "my-work") {
@@ -1291,6 +1774,11 @@ export default function NoraHRKanban() {
               <button onClick={() => setShowArchived(!showArchived)} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${showArchived ? "bg-amber-50 text-amber-700" : "text-slate-500"}`}>
                 <Archive className="h-4 w-4" /> Archive
               </button>
+              {isLocalDemo && (
+                <button onClick={() => setShowItConfig(true)} className="flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-slate-500">
+                  <Settings className="h-4 w-4" /> Configuración IT
+                </button>
+              )}
             </div>
 
             <div className="relative ml-auto hidden min-w-[240px] flex-1 max-w-xl md:block">
@@ -1330,6 +1818,9 @@ export default function NoraHRKanban() {
                     {appIsAdmin && (
                       <button onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Admin</button>
                     )}
+                    {isLocalDemo && (
+                      <button onClick={() => { setShowItConfig(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Configuración IT</button>
+                    )}
                     <button onClick={() => { setShowArchived(!showArchived); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">
                       {showArchived ? "Activas" : "Archivadas"}
                     </button>
@@ -1366,6 +1857,22 @@ export default function NoraHRKanban() {
               <select value={phase} onChange={e => setPhase(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
               </select>
+              {isLocalDemo && (
+                <>
+                  <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                    <option value="Todos">Sistemas</option>{itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                    <option value="Todos">Tipos</option>{itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <select value={slaFilter} onChange={e => setSlaFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                    <option value="Todos">SLA</option><option value="Con SLA">Con SLA</option><option value="Sin SLA">Sin SLA</option><option value="Vencidas">Vencidas</option>
+                  </select>
+                  <select value={responsibleFilter} onChange={e => setResponsibleFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                    <option value="Todos">Responsable</option>{itConfig.team.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </>
+              )}
               {appIsAdmin && (
                 <>
                   <button onClick={() => openAddTask()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"><Plus className="h-4 w-4" /></button>
@@ -1409,7 +1916,7 @@ export default function NoraHRKanban() {
           ) : (
             <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
               {columns.map(({ status, items }) => (
-                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} />
+                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} />
               ))}
             </div>
           )}
@@ -1417,17 +1924,21 @@ export default function NoraHRKanban() {
       </div>
 
       <Modal open={showAdd} onClose={() => setShowAdd(false)}>
-        <TaskForm onSave={addTask} onClose={() => setShowAdd(false)} users={users} />
+        <TaskForm onSave={addTask} onClose={() => setShowAdd(false)} users={users} itConfig={itConfig} isLocal={isLocalDemo} />
       </Modal>
 
       <Modal open={!!editT} onClose={() => setEditT(null)}>
-        {editT && <TaskForm onSave={editTask} onClose={() => setEditT(null)} initial={editT} users={users} />}
+        {editT && <TaskForm onSave={editTask} onClose={() => setEditT(null)} initial={editT} users={users} itConfig={itConfig} isLocal={isLocalDemo} />}
       </Modal>
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} />}
+          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} />}
         </ErrorBoundary>
+      </Modal>
+
+      <Modal open={showItConfig} onClose={() => setShowItConfig(false)}>
+        <ITConfigPanel config={itConfig} onSave={setItConfig} onReset={resetLocalDemo} onClose={() => setShowItConfig(false)} />
       </Modal>
 
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>

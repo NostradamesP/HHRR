@@ -13,7 +13,7 @@ export function BoardProvider({ children }) {
   const initialized = useRef(false);
 
   useEffect(() => {
-    if (!user) {
+    if (!user || !db) {
       setBoards([]);
       setActiveBoardId(null);
       setLoading(true);
@@ -44,7 +44,7 @@ export function BoardProvider({ children }) {
   }, [user]);
 
   useEffect(() => {
-    if (!user || initialized.current) return;
+    if (!user || !db || initialized.current) return;
     initialized.current = true;
 
     (async () => {
