@@ -35,6 +35,7 @@ export function AuthProvider({ children }) {
             email: firebaseUser.email,
             name: firebaseUser.email.split("@")[0],
             role,
+            jobTitle: usersSnap.empty ? "IT Project Manager" : "Soporte Técnico",
             createdAt: new Date().toISOString(),
           };
           await setDoc(doc(db, "users", firebaseUser.uid), data);
@@ -61,6 +62,7 @@ export function AuthProvider({ children }) {
       email,
       name: name || email.split("@")[0],
       role,
+      jobTitle: usersSnap.empty ? "IT Project Manager" : "Soporte Técnico",
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, "users", cred.user.uid), data);

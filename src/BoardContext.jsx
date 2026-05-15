@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, addDoc, getDocs, query, orderBy, where, serverTimestamp, deleteDoc, doc, setDoc } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, getDocs, query, orderBy, where, serverTimestamp, deleteDoc, doc, setDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 
@@ -22,10 +22,17 @@ export function BoardProvider({ children }) {
     }
 
     const unsub = onSnapshot(
-      query(collection(db, "boards"), orderBy("createdAt", "asc")),
+      query(collection(db, "boards"), where("members", "array-contains", user.uid), orderBy("createdAt", "asc")),
       (snap) => {
         const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
         setBoards(list);
+
+        // migration: add members + ownerId to legacy boards
+        list.forEach(b => {
+          if (!b.members && b.createdBy) {
+            updateDoc(doc(db, "boards", b.id), { members: [b.createdBy], ownerId: b.createdBy }).catch(console.error);
+          }
+        });
 
         if (list.length > 0) {
           setActiveBoardId(prev => {
@@ -87,6 +94,8 @@ export function BoardProvider({ children }) {
           const ref = await addDoc(collection(db, "boards"), {
             name: "NoraHR Roadmap",
             createdBy: user.uid,
+            ownerId: user.uid,
+            members: [user.uid],
             createdAt: serverTimestamp(),
           });
           localStorage.setItem("activeBoardId", ref.id);
@@ -107,6 +116,8 @@ export function BoardProvider({ children }) {
     const ref = await addDoc(collection(db, "boards"), {
       name,
       createdBy: user.uid,
+      ownerId: user.uid,
+      members: [user.uid],
       createdAt: serverTimestamp(),
     });
     localStorage.setItem("activeBoardId", ref.id);
@@ -142,8 +153,22 @@ export function BoardProvider({ children }) {
     setActiveBoardId(boardId);
   }
 
+  async function addMember(boardId, uid) {
+    if (!user) return;
+    await updateDoc(doc(db, "boards", boardId), {
+      members: arrayUnion(uid),
+    });
+  }
+
+  async function removeMember(boardId, uid) {
+    if (!user) return;
+    await updateDoc(doc(db, "boards", boardId), {
+      members: arrayRemove(uid),
+    });
+  }
+
   return (
-    <BoardContext.Provider value={{ boards, activeBoardId, switchBoard, createBoard, deleteBoard, loading }}>
+    <BoardContext.Provider value={{ boards, activeBoardId, switchBoard, createBoard, deleteBoard, addMember, removeMember, loading }}>
       {children}
     </BoardContext.Provider>
   );

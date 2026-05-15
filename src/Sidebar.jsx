@@ -8,7 +8,10 @@ import {
   Plus,
   Search,
   UserRoundCheck,
+  Users,
   X,
+  UserPlus,
+  UserMinus,
 } from "lucide-react";
 import { useBoard } from "./BoardContext";
 import { useAuth } from "./AuthContext";
@@ -25,8 +28,8 @@ const boardColors = [
   { dot: "bg-blue-500", soft: "bg-blue-50" },
 ];
 
-export default function Sidebar({ open, onClose, onQuickAction }) {
-  const { boards, activeBoardId, switchBoard, createBoard, deleteBoard } = useBoard();
+export default function Sidebar({ open, onClose, onQuickAction, users: allUsers = [] }) {
+  const { boards, activeBoardId, switchBoard, createBoard, deleteBoard, addMember, removeMember } = useBoard();
   const { isAdmin, user, userData } = useAuth();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appIsAdmin = isAdmin || isLocalDemo;
@@ -37,6 +40,7 @@ export default function Sidebar({ open, onClose, onQuickAction }) {
   const [search, setSearch] = useState("");
   const [newName, setNewName] = useState("");
   const [error, setError] = useState("");
+  const [manageBoardId, setManageBoardId] = useState(null);
 
   const filtered = appBoards.filter(b =>
     b.name.toLowerCase().includes(search.toLowerCase())
@@ -61,6 +65,9 @@ export default function Sidebar({ open, onClose, onQuickAction }) {
     if (!confirm(`¿Eliminar el board "${board?.name}" y todas sus tareas?`)) return;
     deleteBoard(boardId).catch(console.error);
   }
+
+  const manageBoard = appBoards.find(b => b.id === manageBoardId);
+  const nonMembers = allUsers.filter(u => !manageBoard?.members?.includes(u.id) && u.id !== "local-demo-user");
 
   return (
     <>
@@ -167,13 +174,26 @@ export default function Sidebar({ open, onClose, onQuickAction }) {
                         <span className={`inline-block h-2.5 w-2.5 rounded-full ${boardColors[i % boardColors.length].dot}`} />
                       </span>
                       <span className="truncate">{b.name}</span>
-                      {b.id === appActiveBoardId && <span className="ml-auto h-2 w-2 rounded-full bg-cyan-500" />}
+                      <div className="ml-auto flex items-center gap-1">
+                        {b.ownerId === appUser?.uid && <span className="text-[8px] font-black uppercase text-amber-500">Owner</span>}
+                        {Array.isArray(b.members) && <span className="text-[10px] text-slate-400">{b.members.length}</span>}
+                        {b.id === appActiveBoardId && <span className="h-2 w-2 rounded-full bg-cyan-500" />}
+                      </div>
                     </div>
                   </button>
+                  {!isLocalDemo && b.ownerId === appUser?.uid && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setManageBoardId(b.id); }}
+                      className="absolute right-8 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-cyan-50 hover:text-cyan-600 group-hover:opacity-100"
+                      title="Gestionar miembros"
+                    >
+                      <Users className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                   {appIsAdmin && !isLocalDemo && appBoards.length > 1 && (
                     <button
                       onClick={(e) => handleDelete(b.id, e)}
-                      className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+                      className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
                     >
                       <X className="h-3.5 w-3.5" />
                     </button>
@@ -189,11 +209,57 @@ export default function Sidebar({ open, onClose, onQuickAction }) {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-black text-slate-800">{appUserData?.name || appUser?.email}</p>
                 <p className="truncate text-xs text-slate-400">{appUser?.email}</p>
+                {appUserData?.jobTitle && <p className="truncate text-[10px] font-medium text-cyan-600">{appUserData.jobTitle}</p>}
               </div>
               <CircleHelp className="h-4 w-4 text-slate-300" />
             </div>
           </div>
         </div>
+
+        {manageBoard && !isLocalDemo && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/25 backdrop-blur-sm" onClick={() => setManageBoardId(null)}>
+            <div className="w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl" onClick={e => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h3 className="text-sm font-black text-slate-900">Miembros: {manageBoard.name}</h3>
+                <button onClick={() => setManageBoardId(null)} className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="space-y-2">
+                {allUsers.filter(u => manageBoard.members?.includes(u.id)).map(u => (
+                  <div key={u.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">{u.name || u.email}</p>
+                      <p className="text-xs text-slate-400">{u.email} {u.jobTitle ? `· ${u.jobTitle}` : ""}</p>
+                    </div>
+                    {manageBoard.ownerId === appUser?.uid && u.id !== appUser?.uid && (
+                      <button onClick={() => { removeMember(manageBoard.id, u.id); }} className="flex h-7 items-center gap-1 rounded-lg border border-red-200 px-2 text-[10px] font-medium text-red-600 hover:bg-red-50">
+                        <UserMinus className="h-3 w-3" /> Remover
+                      </button>
+                    )}
+                    {u.id === manageBoard.ownerId && <span className="rounded-md bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Owner</span>}
+                  </div>
+                ))}
+              </div>
+              {manageBoard.ownerId === appUser?.uid && nonMembers.length > 0 && (
+                <div className="mt-4 border-t border-slate-200 pt-4">
+                  <h4 className="mb-2 text-[11px] font-black uppercase text-slate-400">Invitados disponibles</h4>
+                  <div className="space-y-2">
+                    {nonMembers.map(u => (
+                      <div key={u.id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3 py-2">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">{u.name || u.email}</p>
+                          <p className="text-xs text-slate-400">{u.email} {u.jobTitle ? `· ${u.jobTitle}` : ""}</p>
+                        </div>
+                        <button onClick={() => { addMember(manageBoard.id, u.id); }} className="flex h-7 items-center gap-1 rounded-lg border border-cyan-200 px-2 text-[10px] font-medium text-cyan-700 hover:bg-cyan-50">
+                          <UserPlus className="h-3 w-3" /> Invitar
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </aside>
     </>
   );

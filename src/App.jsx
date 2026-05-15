@@ -114,6 +114,30 @@ const defaultItConfig = {
   impacts: ["Bajo", "Medio", "Alto", "Crítico"],
   urgencies: ["Baja", "Media", "Alta", "Crítica"],
   team: ["Demo NoraHR", "IT Manager", "Soporte Nivel 1", "Infraestructura"],
+  jobTitles: [
+    "IT Project Manager",
+    "System Administrator",
+    "Ciberseguridad",
+    "DevOps Engineer",
+    "Network Engineer",
+    "Database Administrator",
+    "Cloud Architect",
+    "Soporte Técnico",
+    "Help Desk Analyst",
+    "IT Auditor",
+  ],
+  jobTitleHierarchy: {
+    "IT Project Manager": "manager",
+    "System Administrator": "admin",
+    "Ciberseguridad": "admin",
+    "DevOps Engineer": "editor",
+    "Network Engineer": "editor",
+    "Database Administrator": "editor",
+    "Cloud Architect": "editor",
+    "Soporte Técnico": "viewer",
+    "Help Desk Analyst": "viewer",
+    "IT Auditor": "viewer",
+  },
 };
 
 function readLocalJSON(key, fallback) {
@@ -214,7 +238,7 @@ function DroppableZone({ status }) {
   );
 }
 
-function CardContent({ task, onTaskPatch, isAdmin }) {
+function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const meta = priorityMeta[task.priority] || priorityMeta.Media;
   const PriorityIcon = meta.icon;
   const checklist = checklistProgress(task);
@@ -267,7 +291,13 @@ function CardContent({ task, onTaskPatch, isAdmin }) {
           {task.assignedName ? (
             <>
               <Avatar name={task.assignedName} />
-              <span className="max-w-[80px] truncate text-[10px] font-medium text-slate-600">{task.assignedName}</span>
+              <div className="min-w-0 max-w-[100px]">
+                <p className="truncate text-[10px] font-medium text-slate-600">{task.assignedName}</p>
+                {(() => {
+                  const u = (users || []).find(uu => uu.name === task.assignedName || uu.id === task.assignedTo);
+                  return u?.jobTitle ? <p className="truncate text-[8px] text-slate-400">{u.jobTitle}</p> : null;
+                })()}
+              </div>
             </>
           ) : (
             <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-300">
@@ -280,7 +310,7 @@ function CardContent({ task, onTaskPatch, isAdmin }) {
   );
 }
 
-function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal }) {
+function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users }) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
@@ -317,12 +347,12 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
           <X className="h-3.5 w-3.5" />
         </button>
       )}
-      <CardContent task={task} onTaskPatch={onTaskPatch} isAdmin={isAdmin} />
+      <CardContent task={task} onTaskPatch={onTaskPatch} isAdmin={isAdmin} users={users} />
     </div>
   );
 }
 
-function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal }) {
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal, users }) {
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
   const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
@@ -369,7 +399,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
         <div className="p-1.5">
           <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-1.5">
-              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} />)}
+              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} />)}
               {isAdmin && <DroppableZone status={status} />}
             </div>
           </SortableContext>
@@ -1067,6 +1097,7 @@ function ITConfigPanel({ config, onSave, onReset, onClose }) {
     ["impacts", "Impacto"],
     ["urgencies", "Urgencia"],
     ["team", "Equipo"],
+    ["jobTitles", "Puestos IT"],
   ];
 
   return (
@@ -1174,7 +1205,7 @@ function LoginForm() {
   );
 }
 
-function AdminPanel({ users, currentUser, onClose }) {
+function AdminPanel({ users, currentUser, onClose, itConfig = defaultItConfig }) {
   const [updating, setUpdating] = useState({});
 
   async function toggleRole(uid, currentRole) {
@@ -1185,6 +1216,16 @@ function AdminPanel({ users, currentUser, onClose }) {
       });
     } catch (e) {
       alert("Error al cambiar rol");
+    }
+    setUpdating(p => ({ ...p, [uid]: false }));
+  }
+
+  async function updateJobTitle(uid, jobTitle) {
+    setUpdating(p => ({ ...p, [uid]: true }));
+    try {
+      await updateDoc(doc(db, "users", uid), { jobTitle });
+    } catch (e) {
+      alert("Error al actualizar puesto");
     }
     setUpdating(p => ({ ...p, [uid]: false }));
   }
@@ -1214,6 +1255,12 @@ function AdminPanel({ users, currentUser, onClose }) {
             </div>
             <div className="flex items-center gap-2 shrink-0 ml-3">
               <span className={`rounded-md px-2 py-0.5 text-[10px] font-semibold ${u.role === "admin" ? "bg-cyan-100 text-cyan-700" : "bg-slate-100 text-slate-600"}`}>{u.role}</span>
+              <select value={u.jobTitle || ""} onChange={e => updateJobTitle(u.id, e.target.value)}
+                className="rounded-lg border border-slate-200 px-2 py-1 text-[10px] font-medium text-slate-600 outline-none focus:border-cyan-400"
+                disabled={updating[u.id]}>
+                <option value="">Sin puesto</option>
+                {(itConfig.jobTitles || []).map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
               {u.id !== currentUser?.uid && (
                 <>
                   <button onClick={() => toggleRole(u.id, u.role)} disabled={updating[u.id]}
@@ -1270,6 +1317,9 @@ export default function NoraHRKanban() {
   const [showItConfig, setShowItConfig] = useState(false);
   const [itConfig, setItConfig] = useState(() => readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig));
   const [activeId, setActiveId] = useState(null);
+  const appUserLevel = isLocalDemo ? "manager" : (itConfig.jobTitleHierarchy || {})[appUserData?.jobTitle || ""] || "viewer";
+  const appCanCreate = appIsAdmin || appUserLevel === "manager" || appUserLevel === "admin";
+  const appCanEdit = appCanCreate || appUserLevel === "editor";
   const activeTask = useMemo(() => tasks.find(t => t.id === activeId), [activeId, tasks]);
   const seeded = useRef({});
   const migrated = useRef(false);
@@ -1867,7 +1917,7 @@ export default function NoraHRKanban() {
                   </select>
                 </>
               )}
-              {appIsAdmin && (
+              {appCanCreate && (
                 <>
                   <button onClick={() => openAddTask()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"><Plus className="h-4 w-4" /></button>
                   <button onClick={() => setDeleteMode(!deleteMode)} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}><Trash2 className="h-4 w-4" /></button>
@@ -1910,7 +1960,7 @@ export default function NoraHRKanban() {
           ) : (
             <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
               {columns.map(({ status, items }) => (
-                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} />
+                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} />
               ))}
             </div>
           )}
@@ -1936,7 +1986,7 @@ export default function NoraHRKanban() {
       </Modal>
 
       <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
-        <AdminPanel users={users} currentUser={appUser} onClose={() => setShowAdmin(false)} />
+        <AdminPanel users={users} currentUser={appUser} onClose={() => setShowAdmin(false)} itConfig={itConfig} />
       </Modal>
 
       <DragOverlay>
@@ -1954,7 +2004,7 @@ export default function NoraHRKanban() {
     >
       {sidebarOpen ? "▶" : "◀"}
     </button>
-    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onQuickAction={handleSidebarAction} />
+    <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onQuickAction={handleSidebarAction} users={users} />
     </>
   );
 }
