@@ -135,7 +135,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete }
   );
 }
 
-function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete }) {
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap }) {
   const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
 
   const colDone = items.filter(t => t.status === "Hecho").length;
@@ -914,7 +914,7 @@ export default function NoraHRKanban() {
 
           <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
             {columns.map(({ status, items }) => (
-              <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={isAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} />
+              <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={isAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} />
             ))}
           </div>
         </div>
