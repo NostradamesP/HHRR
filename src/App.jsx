@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 
 const initialTasks = [
   { id: 1, phase: "V1 - Fundación", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es NoraHR, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", sprint: "Sprint 0", owner: "Eduardo", effort: "Medio" },
@@ -75,42 +75,95 @@ function getStatusStyle(status) { if (status === "Hecho") return "border-emerald
 function getStatusIcon(status) { if (status === "Hecho") return "✅"; if (status === "En progreso") return "⏳"; if (status === "Bloqueado") return "⚠️"; return "○"; }
 
 function Badge({ children, className = "" }) { return <span className={`inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold ${className}`}>{children}</span>; }
-function Card({ children, className = "" }) { return <div className={`rounded-3xl border border-slate-200 bg-white shadow-sm ${className}`}>{children}</div>; }
-function ProgressBar({ value }) { return <div className="h-2 w-full overflow-hidden rounded-full bg-slate-200"><div className="h-full rounded-full bg-slate-950 transition-all duration-300" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
-function StatCard({ icon, label, value }) { return <Card className="p-5"><div className="flex items-center gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-100 text-xl">{icon}</div><div><p className="text-sm text-slate-500">{label}</p><p className="text-2xl font-bold text-slate-950">{value}</p></div></div></Card>; }
+function Card({ children, className = "" }) { return <div className={`rounded-3xl border shadow-sm ${className}`}>{children}</div>; }
+function ProgressBar({ value }) { return <div className="h-2 w-full overflow-hidden rounded-full"><div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} /></div>; }
+function StatCard({ icon, label, value }) { return <Card className="p-5"><div className="flex items-center gap-4"><div className="flex h-11 w-11 items-center justify-center rounded-2xl text-xl">{icon}</div><div><p className="text-sm opacity-60">{label}</p><p className="text-2xl font-bold">{value}</p></div></div></Card>; }
 
-function TaskCard({ task, onStatusChange, compact = false }) {
+function Modal({ isOpen, onClose, children }) {
+  if (!isOpen) return null;
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function TaskForm({ onSave, onClose }) {
+  const [form, setForm] = useState({ title: "", description: "", phase: "V1 - Fundación", module: "Producto", priority: "Media", sprint: "Sprint 0", owner: "Eduardo", effort: "Medio" });
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold">Nueva Tarea</h2>
+      <input placeholder="Título" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="w-full rounded-xl border p-3 outline-none focus:border-blue-500" />
+      <textarea placeholder="Descripción" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className="w-full rounded-xl border p-3 outline-none focus:border-blue-500" rows={3} />
+      <div className="grid grid-cols-2 gap-3">
+        <select value={form.phase} onChange={(e) => setForm({ ...form, phase: e.target.value })} className="rounded-xl border p-2">{
+          Object.keys(phaseIcons).map(p => <option key={p} value={p}>{p}</option>)
+        }</select>
+        <select value={form.priority} onChange={(e) => setForm({ ...form, priority: e.target.value })} className="rounded-xl border p-2">
+          <option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
+        </select>
+        <select value={form.module} onChange={(e) => setForm({ ...form, module: e.target.value })} className="rounded-xl border p-2">
+          <option>Producto</option><option>Arquitectura</option><option>Seguridad</option><option>Infraestructura</option><option>Diseño</option><option>Auth</option><option>Empresas</option><option>Auditoría</option><option>Empleados</option><option>Flutter</option><option>Solicitudes</option><option>Documentos</option><option>Reportes</option><option>Notificaciones</option><option>Nómina</option><option>Compliance RD</option><option>BI</option><option>IA</option>
+        </select>
+        <input placeholder="Sprint" value={form.sprint} onChange={(e) => setForm({ ...form, sprint: e.target.value })} className="rounded-xl border p-2" />
+      </div>
+      <div className="flex gap-3">
+        <button onClick={() => onSave(form)} className="flex-1 rounded-xl bg-blue-600 py-3 font-semibold text-white hover:bg-blue-700">Guardar</button>
+        <button onClick={onClose} className="flex-1 rounded-xl border py-3 font-semibold hover:bg-gray-50">Cancelar</button>
+      </div>
+    </div>
+  );
+}
+
+function TaskCard({ task, onStatusChange, onDelete, compact = false }) {
+  return (
+    <div className="rounded-2xl border p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
       <div className="mb-3 flex flex-wrap gap-2">
         <Badge className={getPriorityStyle(task.priority)}>{task.priority}</Badge>
         <Badge className={getStatusStyle(task.status)}>{getStatusIcon(task.status)} {task.status}</Badge>
         {!compact && <Badge className="border-slate-200 bg-slate-50 text-slate-600">{task.sprint}</Badge>}
       </div>
-      <h3 className="font-bold leading-snug text-slate-950">{task.title}</h3>
-      {!compact && <p className="mt-2 text-sm leading-6 text-slate-600">{task.description}</p>}
-      <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-slate-500">
-        <div><span className="font-semibold text-slate-700">Módulo:</span> {task.module}</div>
-        <div><span className="font-semibold text-slate-700">Esfuerzo:</span> {task.effort || "N/A"}</div>
-        {!compact && <div><span className="font-semibold text-slate-700">Owner:</span> {task.owner || "N/A"}</div>}
-        {!compact && <div><span className="font-semibold text-slate-700">Sprint:</span> {task.sprint || "N/A"}</div>}
+      <h3 className="font-bold leading-snug">{task.title}</h3>
+      {!compact && <p className="mt-2 text-sm leading-6 opacity-60">{task.description}</p>}
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs opacity-60">
+        <div><span className="font-semibold">Módulo:</span> {task.module}</div>
+        <div><span className="font-semibold">Esfuerzo:</span> {task.effort || "N/A"}</div>
+        {!compact && <div><span className="font-semibold">Owner:</span> {task.owner || "N/A"}</div>}
+        {!compact && <div><span className="font-semibold">Sprint:</span> {task.sprint || "N/A"}</div>}
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        {statusOptions.map((status) => (
-          <button key={status} type="button" onClick={() => onStatusChange(task.id, status)} className={`rounded-xl border px-3 py-1.5 text-xs font-semibold transition ${task.status === status ? "border-slate-950 bg-slate-950 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>{status}</button>
-        ))}
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          {statusOptions.map((status) => (
+            <button key={status} type="button" onClick={() => onStatusChange(task.id, status)} className={`rounded-lg border px-2 py-1 text-xs font-semibold transition ${task.status === status ? "border-slate-900 bg-slate-900 text-white" : "hover:bg-gray-100"}`}>{status}</button>
+          ))}
+        </div>
+        <button onClick={() => onDelete(task.id)} className="rounded-lg border border-red-200 bg-red-50 px-2 py-1 text-xs font-semibold text-red-600 hover:bg-red-100">🗑️</button>
       </div>
     </div>
   );
 }
 
 export default function NoraHRRoadmap() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const [tasks, setTasks] = useState(() => {
+    const saved = localStorage.getItem("norahr-tasks");
+    return saved ? JSON.parse(saved) : initialTasks;
+  });
+  const [darkMode, setDarkMode] = useState(() => {
+    const saved = localStorage.getItem("norahr-dark");
+    return saved ? JSON.parse(saved) : false;
+  });
   const [query, setQuery] = useState("");
   const [selectedPriority, setSelectedPriority] = useState("Todas");
   const [selectedModule, setSelectedModule] = useState("Todos");
   const [selectedPhase, setSelectedPhase] = useState("Todas");
   const [activeView, setActiveView] = useState("Etapas");
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  useEffect(() => { localStorage.setItem("norahr-tasks", JSON.stringify(tasks)); }, [tasks]);
+  useEffect(() => { localStorage.setItem("norahr-dark", JSON.stringify(darkMode)); }, [darkMode]);
+
   const phases = useMemo(() => ["Todas", ...getUniqueValues(tasks, "phase")], [tasks]);
   const modules = useMemo(() => ["Todos", ...getUniqueValues(tasks, "module")], [tasks]);
   const filteredTasks = useMemo(() => filterTasks(tasks, query, selectedPhase, selectedModule, selectedPriority), [tasks, query, selectedPhase, selectedModule, selectedPriority]);
@@ -120,26 +173,46 @@ export default function NoraHRRoadmap() {
   const inProgressCount = tasks.filter((task) => task.status === "En progreso").length;
   const blockedCount = tasks.filter((task) => task.status === "Bloqueado").length;
   const progress = calculateProgress(tasks);
+
   const updateStatus = (id, nextStatus) => { setTasks((currentTasks) => currentTasks.map((task) => (task.id === id ? { ...task, status: nextStatus } : task))); };
+  const deleteTask = (id) => { if (confirm("¿Eliminar esta tarea?")) setTasks((currentTasks) => currentTasks.filter((task) => task.id !== id)); };
+  const addTask = (form) => {
+    const newTask = { ...form, id: Date.now(), status: "Pendiente" };
+    setTasks((currentTasks) => [...currentTasks, newTask]);
+    setShowAddModal(false);
+  };
   const resetFilters = () => { setQuery(""); setSelectedPriority("Todas"); setSelectedModule("Todos"); setSelectedPhase("Todas"); };
 
+  const bg = darkMode ? "bg-slate-900" : "bg-slate-50";
+  const text = darkMode ? "text-white" : "text-slate-950";
+  const cardBg = darkMode ? "bg-slate-800 border-slate-700" : "bg-white border-slate-200";
+  const inputBg = darkMode ? "bg-slate-700 border-slate-600 text-white" : "bg-white border-slate-200";
+  const headerBg = darkMode ? "bg-slate-800" : "bg-slate-950";
+  const progressBar = darkMode ? "bg-slate-700" : "bg-white/20";
+  const progressFill = darkMode ? "bg-blue-500" : "bg-white";
+
   return (
-    <div className="min-h-screen bg-slate-50 p-4 text-slate-950 md:p-8">
+    <div className={`min-h-screen p-4 md:p-8 ${bg} ${text} transition-colors`}>
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="overflow-hidden rounded-3xl bg-slate-950 p-6 text-white shadow-xl md:p-8">
+        <section className={`overflow-hidden rounded-3xl ${headerBg} p-6 text-white shadow-xl md:p-8`}>
           <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
             <div className="max-w-3xl space-y-3">
-              <div className="flex items-center gap-2 text-sm text-slate-300">📱 Flutter-first · ☁️ Cloud-first · 🔐 Security-first</div>
+              <div className="flex items-center gap-4 text-sm text-slate-300">
+                <span>📱 Flutter-first · ☁️ Cloud-first · 🔐 Security-first</span>
+                <button onClick={() => setDarkMode(!darkMode)} className="rounded-full bg-white/10 px-3 py-1 text-xs hover:bg-white/20">
+                  {darkMode ? "☀️" : "🌙"}
+                </button>
+              </div>
               <h1 className="text-3xl font-bold tracking-tight md:text-5xl">Roadmap Interactivo NoraHR</h1>
               <p className="text-base leading-7 text-slate-300 md:text-lg">Plan por etapas para construir una plataforma moderna de RRHH, autoservicio, documentos, solicitudes, nómina ligera, cumplimiento RD y BI.</p>
             </div>
-            <div className="w-full rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur md:w-80">
+            <div className={`w-full rounded-3xl border border-white/10 bg-white/10 p-5 backdrop-blur md:w-80 ${darkMode ? "bg-white/5" : ""}`}>
               <div className="text-sm text-slate-300">Progreso general</div>
               <div className="mt-2 flex items-end gap-2">
                 <span className="text-4xl font-bold">{progress}%</span>
                 <span className="pb-1 text-sm text-slate-300">{doneCount}/{tasks.length} tareas</span>
               </div>
-              <div className="mt-3"><div className="h-2 w-full overflow-hidden rounded-full bg-white/20"><div className="h-full rounded-full bg-white transition-all duration-300" style={{ width: `${progress}%` }} /></div></div>
+              <div className="mt-3"><div className={`h-2 w-full overflow-hidden rounded-full ${progressBar}`}><div className={`h-full rounded-full transition-all duration-300 ${progressFill}`} style={{ width: `${progress}%` }} /></div></div>
             </div>
           </div>
         </section>
@@ -151,22 +224,25 @@ export default function NoraHRRoadmap() {
           <StatCard icon="✅" label="Hechas" value={doneCount} />
         </section>
 
-        <Card className="p-5">
+        <Card className={`p-5 ${cardBg}`}>
+          <div className="mb-4 flex justify-end">
+            <button onClick={() => setShowAddModal(true)} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">+ Agregar Tarea</button>
+          </div>
           <div className="grid gap-3 md:grid-cols-5">
-            <input type="search" placeholder="Buscar tarea, módulo o etapa..." value={query} onChange={(event) => setQuery(event.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-950 md:col-span-2" />
-            <select value={selectedPhase} onChange={(event) => setSelectedPhase(event.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-950">{phases.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select>
-            <select value={selectedModule} onChange={(event) => setSelectedModule(event.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-950">{modules.map((module) => <option key={module} value={module}>{module}</option>)}</select>
-            <select value={selectedPriority} onChange={(event) => setSelectedPriority(event.target.value)} className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm outline-none transition focus:border-slate-950">{priorityOptions.map((priority) => <option key={priority} value={priority}>{priority}</option>)}</select>
+            <input type="search" placeholder="Buscar tarea..." value={query} onChange={(e) => setQuery(e.target.value)} className={`rounded-2xl border px-4 py-3 text-sm outline-none md:col-span-2 ${inputBg}`} />
+            <select value={selectedPhase} onChange={(e) => setSelectedPhase(e.target.value)} className={`rounded-2xl border px-4 py-3 text-sm outline-none ${inputBg}`}>{phases.map((phase) => <option key={phase} value={phase}>{phase}</option>)}</select>
+            <select value={selectedModule} onChange={(e) => setSelectedModule(e.target.value)} className={`rounded-2xl border px-4 py-3 text-sm outline-none ${inputBg}`}>{modules.map((module) => <option key={module} value={module}>{module}</option>)}</select>
+            <select value={selectedPriority} onChange={(e) => setSelectedPriority(e.target.value)} className={`rounded-2xl border px-4 py-3 text-sm outline-none ${inputBg}`}>{priorityOptions.map((p) => <option key={p} value={p}>{p}</option>)}</select>
           </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-            <p className="text-sm text-slate-500">Mostrando {filteredTasks.length} de {tasks.length} tareas.</p>
-            <button type="button" onClick={resetFilters} className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">Limpiar filtros</button>
+            <p className="text-sm opacity-60">Mostrando {filteredTasks.length} de {tasks.length} tareas.</p>
+            <button type="button" onClick={resetFilters} className={`rounded-xl border px-4 py-2 text-sm font-semibold ${darkMode ? "border-slate-600 hover:bg-slate-700" : "hover:bg-slate-50"}`}>Limpiar filtros</button>
           </div>
         </Card>
 
-        <nav className="flex flex-wrap gap-2 rounded-3xl bg-slate-200 p-2 md:w-fit">
+        <nav className="flex flex-wrap gap-2 rounded-3xl p-2 md:w-fit" style={{ background: darkMode ? "#1e293b" : "#e2e8f0" }}>
           {viewOptions.map((view) => (
-            <button key={view} type="button" onClick={() => setActiveView(view)} className={`rounded-2xl px-5 py-2 text-sm font-semibold transition ${activeView === view ? "bg-white text-slate-950 shadow-sm" : "text-slate-600 hover:bg-white/60"}`}>{view}</button>
+            <button key={view} type="button" onClick={() => setActiveView(view)} className={`rounded-2xl px-5 py-2 text-sm font-semibold transition ${activeView === view ? `bg-white shadow-sm ${text}` : darkMode ? "text-slate-400 hover:bg-slate-700" : "text-slate-600 hover:bg-white/60"}`}>{view}</button>
           ))}
         </nav>
 
@@ -176,18 +252,18 @@ export default function NoraHRRoadmap() {
               const phaseProgress = calculateProgress(phaseTasks);
               const phaseDone = phaseTasks.filter((task) => task.status === "Hecho").length;
               return (
-                <Card key={phase} className="p-5 md:p-6">
+                <Card key={phase} className={`p-5 md:p-6 ${cardBg}`}>
                   <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-xl text-white">{phaseIcons[phase] || "🚀"}</div>
-                      <div><h2 className="text-xl font-bold">{phase}</h2><p className="text-sm text-slate-500">{phaseDone}/{phaseTasks.length} completadas</p></div>
+                      <div className="flex h-12 w-12 items-center justify-center rounded-2xl text-xl text-white" style={{ background: darkMode ? "#3b82f6" : "#0f172a" }}>{phaseIcons[phase] || "🚀"}</div>
+                      <div><h2 className="text-xl font-bold">{phase}</h2><p className="text-sm opacity-60">{phaseDone}/{phaseTasks.length} completadas</p></div>
                     </div>
                     <div className="w-full md:w-72">
-                      <div className="mb-1 flex justify-between text-xs text-slate-500"><span>Progreso</span><span>{phaseProgress}%</span></div>
+                      <div className="mb-1 flex justify-between text-xs opacity-60"><span>Progreso</span><span>{phaseProgress}%</span></div>
                       <ProgressBar value={phaseProgress} />
                     </div>
                   </div>
-                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{phaseTasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={updateStatus} />)}</div>
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{phaseTasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={updateStatus} onDelete={deleteTask} />)}</div>
                 </Card>
               );
             })}
@@ -199,11 +275,11 @@ export default function NoraHRRoadmap() {
             {statusOptions.map((status) => {
               const statusTasks = filteredTasks.filter((task) => task.status === status);
               return (
-                <Card key={status} className="p-4">
-                  <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{getStatusIcon(status)} {status}</h2><Badge className="border-slate-200 bg-slate-50 text-slate-600">{statusTasks.length}</Badge></div>
+                <Card key={status} className={`p-4 ${cardBg}`}>
+                  <div className="mb-4 flex items-center justify-between"><h2 className="font-bold">{getStatusIcon(status)} {status}</h2><Badge className={`border-slate-200 ${darkMode ? "bg-slate-700" : "bg-slate-50"}`}>{statusTasks.length}</Badge></div>
                   <div className="space-y-3">
-                    {statusTasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={updateStatus} compact />)}
-                    {statusTasks.length === 0 && <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-center text-sm text-slate-400">No hay tareas aquí.</div>}
+                    {statusTasks.map((task) => <TaskCard key={task.id} task={task} onStatusChange={updateStatus} onDelete={deleteTask} compact />)}
+                    {statusTasks.length === 0 && <div className="rounded-2xl border border-dashed p-4 text-center text-sm opacity-40">No hay tareas aquí.</div>}
                   </div>
                 </Card>
               );
@@ -214,28 +290,32 @@ export default function NoraHRRoadmap() {
         {activeView === "Seguridad" && (
           <section className="grid gap-4 md:grid-cols-3">
             {[{ title: "Backend primero", icon: "🔐", items: ["Permisos validados en API", "JWT corto + refresh token", "MFA para admins", "Rate limiting"] }, { title: "Datos sensibles", icon: "🛡️", items: ["Storage privado", "URLs firmadas", "Cifrado en tránsito", "Backups cifrados"] }, { title: "Auditoría", icon: "📄", items: ["Cambios de salario", "Descargas", "Aprobaciones", "Cambios de permisos"] }].map((section) => (
-              <Card key={section.title} className="p-6">
-                <div className="mb-4 flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-950 text-xl text-white">{section.icon}</div><h3 className="text-lg font-bold">{section.title}</h3></div>
-                <div className="space-y-2">{section.items.map((item) => <div key={item} className="flex items-center gap-2 rounded-2xl bg-slate-100 p-3 text-sm text-slate-700">✅ {item}</div>)}</div>
+              <Card key={section.title} className={`p-6 ${cardBg}`}>
+                <div className="mb-4 flex items-center gap-3"><div className="flex h-12 w-12 items-center justify-center rounded-2xl text-xl text-white" style={{ background: darkMode ? "#3b82f6" : "#0f172a" }}>{section.icon}</div><h3 className="text-lg font-bold">{section.title}</h3></div>
+                <div className="space-y-2">{section.items.map((item) => <div key={item} className={`rounded-2xl p-3 text-sm ${darkMode ? "bg-slate-700" : "bg-slate-100"}`}>✅ {item}</div>)}</div>
               </Card>
             ))}
           </section>
         )}
 
         {activeView === "Tests" && (
-          <Card className="p-6">
-            <div className="mb-5"><h2 className="text-xl font-bold">Pruebas internas del roadmap</h2><p className="mt-1 text-sm text-slate-500">Estas pruebas validan las funciones puras de filtrado, agrupación y progreso.</p></div>
+          <Card className={`p-6 ${cardBg}`}>
+            <div className="mb-5"><h2 className="text-xl font-bold">Pruebas internas del roadmap</h2><p className="mt-1 text-sm opacity-60">Estas pruebas validan las funciones puras de filtrado, agrupación y progreso.</p></div>
             <div className="space-y-3">
               {tests.map((test) => (
                 <div key={test.name} className={`flex items-center justify-between rounded-2xl border p-4 ${test.pass ? "border-emerald-200 bg-emerald-50" : "border-rose-200 bg-rose-50"}`}>
-                  <span className="font-semibold text-slate-800">{test.name}</span>
-                  <Badge className={test.pass ? "border-emerald-200 bg-white text-emerald-700" : "border-rose-200 bg-white text-rose-700"}>{test.pass ? "PASS" : "FAIL"}</Badge>
+                  <span className="font-semibold">{test.name}</span>
+                  <Badge className={test.pass ? "border-emerald-200 text-emerald-700" : "border-rose-200 text-rose-700"}>{test.pass ? "PASS" : "FAIL"}</Badge>
                 </div>
               ))}
             </div>
           </Card>
         )}
       </div>
+
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)}>
+        <TaskForm onSave={addTask} onClose={() => setShowAddModal(false)} />
+      </Modal>
     </div>
   );
 }
