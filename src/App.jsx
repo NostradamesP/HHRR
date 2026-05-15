@@ -99,7 +99,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap }) {
 function DueDateBadge({ dueDate }) {
   const days = Math.ceil((new Date(dueDate) - new Date()) / (1000 * 60 * 60 * 24));
   const color = days < 0 ? "text-red-500" : days <= 3 ? "text-amber-500" : "text-emerald-500";
-  const label = days < 0 ? `🔴 Vencida` : days === 0 ? `🔴 Hoy` : days === 1 ? `🟡 Mañana` : days <= 3 ? `🟡 ${days} días` : `🟢 ${days} días`;
+  const label = days < 0 ? `🔴 Vencida` : days === 0 ? `🔴 Hoy` : days === 1 ? `🟡 Mañana` : days <= 3 ? `🟡 ${days} días` : days > 30 ? `🟢 > 30 días` : `🟢 ${days} días`;
   return <div className={`mt-1 text-[11px] font-medium ${color}`}>{label}</div>;
 }
 
@@ -328,7 +328,6 @@ function LoginForm() {
 }
 
 function AdminPanel({ users, currentUser, onClose }) {
-  const { db: firestoreDb } = { db };
   const [updating, setUpdating] = useState({});
 
   async function toggleRole(uid, currentRole) {
@@ -421,24 +420,42 @@ export default function NoraHRKanban() {
     const unsub = onSnapshot(q, (snap) => {
       const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTasks(ts);
+      const missingOrder = ts.filter(t => t.order === undefined || t.order === null);
+      if (missingOrder.length > 0) {
+        Promise.allSettled(
+          missingOrder.map(t =>
+            updateDoc(doc(db, "boards", activeBoardId, "tasks", t.id), { order: Date.now() })
+          )
+        );
+      }
       if (snap.empty && isAdmin && !seeded.current[activeBoardId]) {
         seeded.current[activeBoardId] = true;
         const board = boardsRef.current.find(b => b.id === activeBoardId);
         if (board && board.name === "NoraHR Roadmap") {
-          initialTasks.forEach(async (t, idx) => {
-            const { id, ...data } = t;
-            await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
-              ...data,
-              order: Date.now() + idx,
-              dueDate: "",
-              archived: false,
-              assignedTo: "",
-              assignedName: "",
-              createdBy: user.uid,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          });
+          (async () => {
+            try {
+              const results = await Promise.allSettled(
+                initialTasks.map(async (t, idx) => {
+                  const { id, ...data } = t;
+                  return addDoc(collection(db, "boards", activeBoardId, "tasks"), {
+                    ...data,
+                    order: Date.now() + idx,
+                    dueDate: "",
+                    archived: false,
+                    assignedTo: "",
+                    assignedName: "",
+                    createdBy: user.uid,
+                    createdAt: serverTimestamp(),
+                    updatedAt: serverTimestamp(),
+                  });
+                })
+              );
+              const rejected = results.filter(r => r.status === "rejected");
+              if (rejected.length > 0) console.error("Error seeding tasks:", rejected);
+            } catch (e) {
+              console.error("Error seeding tasks:", e);
+            }
+          })();
         }
       }
     });
@@ -455,21 +472,26 @@ export default function NoraHRKanban() {
 
   useEffect(() => {
     if (!user || !isAdmin || !activeBoardId || migrated.current) return;
-    migrated.current = true;
-    getDocs(collection(db, "tasks")).then(async (snap) => {
-      if (snap.empty) return;
-      const writes = snap.docs.map((d, idx) =>
-        setDoc(doc(db, "boards", activeBoardId, "tasks", d.id), {
-          ...d.data(),
-          order: d.data().order || Date.now() + idx,
-          dueDate: d.data().dueDate || "",
-          archived: d.data().archived || false,
-          updatedAt: serverTimestamp(),
-        })
-      );
-      await Promise.all(writes);
-      await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "tasks", d.id))));
-    });
+    (async () => {
+      try {
+        const snap = await getDocs(collection(db, "tasks"));
+        if (snap.empty) { migrated.current = true; return; }
+        const writes = snap.docs.map((d, idx) =>
+          setDoc(doc(db, "boards", activeBoardId, "tasks", d.id), {
+            ...d.data(),
+            order: d.data().order || Date.now() + idx,
+            dueDate: d.data().dueDate || "",
+            archived: d.data().archived || false,
+            updatedAt: serverTimestamp(),
+          })
+        );
+        await Promise.all(writes);
+        await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "tasks", d.id))));
+        migrated.current = true;
+      } catch (e) {
+        console.error("Migration failed:", e);
+      }
+    })();
   }, [user, isAdmin, activeBoardId]);
 
   const userMap = useMemo(() => {
@@ -631,7 +653,7 @@ export default function NoraHRKanban() {
 
   function exportCSV() {
     const headers = "Título,Módulo,Fase,Prioridad,Esfuerzo,Estado,Asignado\n";
-    const rows = tasks.map(t => `"${t.title}","${t.module}","${t.phase} - ${phaseMap[t.phase]}","${t.priority}","${t.effort}","${t.status}","${t.assignedName || ""}"`).join("\n");
+    const rows = tasks.filter(t => !t.archived).map(t => `"${t.title}","${t.module}","${t.phase} - ${phaseMap[t.phase]}","${t.priority}","${t.effort}","${t.status}","${t.assignedName || ""}"`).join("\n");
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "norahr-tasks.csv"; a.click();
   }
