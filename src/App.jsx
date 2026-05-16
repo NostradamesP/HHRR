@@ -176,6 +176,8 @@ function enrichLocalTask(task, idx, config = defaultItConfig) {
     urgency: task.urgency || (task.priority === "Alta" ? "Alta" : "Media"),
     slaHours: task.slaHours || (task.priority === "Alta" ? 24 : 72),
     checklist: Array.isArray(task.checklist) && task.checklist.length ? task.checklist : makeChecklist(task.title),
+    operationalState: task.operationalState || "normal",
+    blockedReason: task.blockedReason || "",
   };
 }
 
@@ -184,6 +186,39 @@ function checklistProgress(task) {
   if (!items.length) return { done: 0, total: 0, pct: 0 };
   const done = items.filter(i => i.done).length;
   return { done, total: items.length, pct: Math.round((done / items.length) * 100) };
+}
+
+const operationalStates = {
+  normal: { label: "Normal", tone: "border-slate-200 bg-slate-50 text-slate-600", icon: Circle },
+  follow_up: { label: "Necesita seguimiento", tone: "border-amber-100 bg-amber-50 text-amber-700", icon: Clock3 },
+  blocked: { label: "Bloqueada", tone: "border-rose-100 bg-rose-50 text-rose-700", icon: Lock },
+  ready_to_close: { label: "Lista para cerrar", tone: "border-emerald-100 bg-emerald-50 text-emerald-700", icon: CheckCircle2 },
+};
+
+function isTaskOverdue(task) {
+  if (!task.dueDate || task.status === "Hecho") return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(task.dueDate) < today;
+}
+
+function getOperationalState(task) {
+  if (task.status === "Bloqueado") return "blocked";
+  return task.operationalState || "normal";
+}
+
+function isReadyToClose(task) {
+  const checklist = checklistProgress(task);
+  return task.status !== "Hecho" && checklist.total > 0 && checklist.done === checklist.total;
+}
+
+function operationalRank(task) {
+  if (isTaskOverdue(task)) return 0;
+  if (getOperationalState(task) === "blocked") return 1;
+  if (task.urgency === "Crítica" || task.urgency === "Alta" || task.priority === "Alta") return 2;
+  if (!task.assignedTo && !task.assignedName) return 3;
+  if (isReadyToClose(task)) return 4;
+  return 5;
 }
 
 function filterTasks(tasks, q, mod, prio, ph) {
@@ -238,6 +273,9 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const checklist = checklistProgress(task);
   const isBlocked = task.status === "Bloqueado";
   const isCritical = task.urgency === "Crítica";
+  const opKey = getOperationalState(task);
+  const opMeta = operationalStates[opKey] || operationalStates.normal;
+  const OpIcon = opMeta.icon;
   const slaTone = task.slaHours ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-slate-50 text-slate-400";
   const impactTone = task.impact === "Crítico" || task.impact === "Alto" ? "border-red-100 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-600";
   const urgencyTone = task.urgency === "Crítica" || task.urgency === "Alta" ? "border-amber-100 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600";
@@ -265,6 +303,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
       <div className="flex flex-wrap gap-1.5">
         <CardBadge icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system || "Sin sistema"}</CardBadge>
         <CardBadge className="border-slate-200 bg-white text-slate-700">{task.ticketType || "Sin tipo"}</CardBadge>
+        <CardBadge icon={OpIcon} className={opMeta.tone}>{opMeta.label}</CardBadge>
         <div className="min-w-0">
           {isAdmin ? (
             <select value={task.module} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { module: e.target.value }); }}
@@ -320,13 +359,15 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
-  const overdue = task.dueDate && new Date(task.dueDate) < new Date();
+  const overdue = isTaskOverdue(task);
   const isBlocked = task.status === "Bloqueado";
   const isCritical = task.urgency === "Crítica";
+  const ready = isReadyToClose(task);
 
   let borderClass = "";
   if (isBlocked) borderClass = "border-l-4 border-l-red-500";
   else if (overdue) borderClass = "border-l-4 border-l-orange-400";
+  else if (ready) borderClass = "border-l-4 border-l-emerald-400";
   else if (isCritical) borderClass = "border-l-4 border-l-rose-400";
 
   function openCard(e) {
@@ -461,6 +502,8 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
     checklist: makeChecklist("Nueva tarea"),
   });
   const [newCheckItem, setNewCheckItem] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
 
   function addCheckItem() {
     const text = newCheckItem.trim();
@@ -475,6 +518,20 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
 
   function removeChecklistItem(id) {
     setF({ ...f, checklist: (f.checklist || []).filter(item => item.id !== id) });
+  }
+
+  async function handleSave() {
+    if (!f.title.trim() || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await onSave({ ...f, title: f.title.trim(), id: initial?.id });
+    } catch (err) {
+      console.error("Task save failed:", err);
+      setError(err?.message || "No se pudo guardar la tarea. Revisa permisos o el board activo.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -500,10 +557,12 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
           </select>
           <input value={f.requester || ""} onChange={e => setF({ ...f, requester: e.target.value })} placeholder="Solicitante" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
           <input value={f.slaHours || ""} onChange={e => setF({ ...f, slaHours: Number(e.target.value) || "" })} type="number" min="1" placeholder="SLA horas" className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400" />
-          <select value={f.assignedName || ""} onChange={e => setF({ ...f, assignedTo: e.target.value ? `local-${e.target.value}` : "", assignedName: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
-            <option value="">Sin asignar</option>
-            {itConfig.team.map(v => <option key={v} value={v}>Asignar: {v}</option>)}
-          </select>
+          {isLocal && (
+            <select value={f.assignedName || ""} onChange={e => setF({ ...f, assignedTo: e.target.value ? `local-${e.target.value}` : "", assignedName: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
+              <option value="">Sin asignar</option>
+              {itConfig.team.map(v => <option key={v} value={v}>Asignar: {v}</option>)}
+            </select>
+          )}
           <select value={f.impact || ""} onChange={e => setF({ ...f, impact: e.target.value })} className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400">
             {itConfig.impacts.map(v => <option key={v} value={v}>Impacto: {v}</option>)}
           </select>
@@ -535,9 +594,14 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
           {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
         </select>
       )}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+          {error}
+        </div>
+      )}
       <div className="flex gap-3 pt-1">
-        <button onClick={() => f.title && onSave({ ...f, id: initial?.id })} disabled={!f.title} className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">{initial ? "Actualizar" : "Agregar"}</button>
-        <button onClick={onClose} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors">Cancelar</button>
+        <button type="button" onClick={handleSave} disabled={!f.title.trim() || saving} className="flex-1 rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">{saving ? "Guardando..." : initial ? "Actualizar" : "Agregar"}</button>
+        <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-slate-200 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50 transition-colors">Cancelar</button>
       </div>
     </div>
   );
@@ -559,6 +623,9 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
   const StatusIcon = status.icon;
   const priority = priorityMeta[task.priority] || priorityMeta.Media;
   const PriorityIcon = priority.icon;
+  const operationalKey = getOperationalState(task);
+  const operationalMeta = operationalStates[operationalKey] || operationalStates.normal;
+  const OperationalIcon = operationalMeta.icon;
 
   const availableStatuses = isAdmin
     ? statuses.filter(s => s !== task.status)
@@ -686,6 +753,27 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
     onTaskPatch?.(task.id, { [field]: value });
   }
 
+  function markDone() {
+    if (task.status === "Hecho") {
+      onStatus(task.id, "En progreso");
+      return;
+    }
+    const currentChecklist = checklistProgress(task);
+    if (currentChecklist.total > 0 && currentChecklist.done < currentChecklist.total) {
+      const ok = confirm(`El checklist está incompleto (${currentChecklist.done}/${currentChecklist.total}). ¿Marcar como hecho de todos modos?`);
+      if (!ok) return;
+    }
+    onStatus(task.id, "Hecho");
+  }
+
+  function assignToMe() {
+    if (!detailUser) return;
+    onTaskPatch?.(task.id, {
+      assignedTo: detailUser.uid,
+      assignedName: detailUserData?.name || detailUser.email,
+    });
+  }
+
   function patchChecklist(checklist) {
     onTaskPatch?.(task.id, { checklist });
   }
@@ -808,7 +896,7 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
 
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-100/80 px-4 py-3">
         <button
-          onClick={() => onStatus(task.id, task.status === "Hecho" ? "En progreso" : "Hecho")}
+          onClick={markDone}
           className="flex items-center gap-3 rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-50"
         >
           <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-black ${task.status === "Hecho" ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-emerald-600"}`}>
@@ -856,7 +944,10 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                         )}
                       </div>
                     </div>
-                    <FieldPill icon={StatusIcon} className={status.soft}>{task.status}</FieldPill>
+                    <div className="flex flex-col items-end gap-2">
+                      <FieldPill icon={StatusIcon} className={status.soft}>{task.status}</FieldPill>
+                      <FieldPill icon={OperationalIcon} className={operationalMeta.tone}>{operationalMeta.label}</FieldPill>
+                    </div>
                   </div>
 
                   <div className="grid gap-3 sm:grid-cols-2">
@@ -890,6 +981,18 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                         </select>
                       ) : <p className={readonlyText}>{task.ticketType || "Sin definir"}</p>}
                     </InlineField>
+                    <InlineField label="Decisión manager">
+                      {isAdmin ? (
+                        <select value={task.operationalState || "normal"} onChange={e => updateField("operationalState", e.target.value)} className={mutedInput}>
+                          {Object.entries(operationalStates).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
+                        </select>
+                      ) : <p className={readonlyText}>{operationalMeta.label}</p>}
+                    </InlineField>
+                    <InlineField label="Motivo bloqueo">
+                      {isAdmin ? (
+                        <input value={task.blockedReason || ""} onChange={e => updateField("blockedReason", e.target.value)} placeholder="Dependencia, proveedor, acceso..." className={mutedInput} />
+                      ) : <p className={readonlyText}>{task.blockedReason || "Sin motivo"}</p>}
+                    </InlineField>
                   </div>
 
                   <div id="task-description" className="rounded-xl border border-slate-200">
@@ -912,7 +1015,11 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                   <section id="task-assignees" className="scroll-mt-4 border-t border-slate-200 pt-5">
                     <div className="mb-3 flex items-center justify-between">
                       <h3 className="text-lg font-black text-slate-900">Assignees</h3>
-                      <Users className="h-5 w-5 text-slate-300" />
+                      {(!task.assignedTo && !task.assignedName && isAdmin) ? (
+                        <button onClick={assignToMe} className="rounded-lg bg-cyan-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-cyan-700">Asignarme</button>
+                      ) : (
+                        <Users className="h-5 w-5 text-slate-300" />
+                      )}
                     </div>
                     {isLocal ? (
                       <select
@@ -1106,6 +1213,10 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2 text-slate-500"><Archive className="h-4 w-4" />Archived</span>
                   <span className="font-bold text-slate-800">{task.archived ? "Sí" : "No"}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-2 text-slate-500"><OperationalIcon className="h-4 w-4" />Decisión</span>
+                  <span className="font-bold text-slate-800">{operationalMeta.label}</span>
                 </div>
               </div>
             </div>
@@ -1379,6 +1490,7 @@ export default function NoraHRKanban() {
   const [typeFilter, setTypeFilter] = useState("Todos");
   const [slaFilter, setSlaFilter] = useState("Todos");
   const [responsibleFilter, setResponsibleFilter] = useState("Todos");
+  const [opsFilter, setOpsFilter] = useState("all");
   const [showAdd, setShowAdd] = useState(false);
   const [newTaskStatus, setNewTaskStatus] = useState("Pendiente");
   const [editT, setEditT] = useState(null);
@@ -1464,6 +1576,8 @@ export default function NoraHRKanban() {
                     archived: false,
                     assignedTo: user.uid,
                     assignedName: adminName,
+                    operationalState: "normal",
+                    blockedReason: "",
                     ticketType: "",
                     requester: "Operaciones IT",
                     system: "",
@@ -1552,22 +1666,45 @@ export default function NoraHRKanban() {
     if (slaFilter === "Con SLA") ts = ts.filter(t => t.slaHours);
     if (slaFilter === "Sin SLA") ts = ts.filter(t => !t.slaHours);
     if (slaFilter === "Vencidas") {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      ts = ts.filter(t => t.dueDate && new Date(t.dueDate) < today);
+      ts = ts.filter(isTaskOverdue);
     }
     if (overdueOnly) {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      ts = ts.filter(t => t.dueDate && new Date(t.dueDate) < today);
+      ts = ts.filter(isTaskOverdue);
     }
+    if (opsFilter === "overdue") ts = ts.filter(isTaskOverdue);
+    if (opsFilter === "blocked") ts = ts.filter(t => getOperationalState(t) === "blocked");
+    if (opsFilter === "unassigned") ts = ts.filter(t => !t.assignedTo && !t.assignedName);
+    if (opsFilter === "urgent") ts = ts.filter(t => t.urgency === "Crítica" || t.urgency === "Alta" || t.priority === "Alta");
+    if (opsFilter === "ready") ts = ts.filter(isReadyToClose);
+    ts = [...ts].sort((a, b) => {
+      const rank = operationalRank(a) - operationalRank(b);
+      if (rank !== 0) return rank;
+      return (a.order || 0) - (b.order || 0);
+    });
     return filterTasks(ts, searchQuery, mod, prio, phase);
-  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter]);
+  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter, opsFilter]);
+
+  const operationalMetrics = useMemo(() => {
+    const active = tasks.filter(t => !t.archived);
+    return {
+      overdue: active.filter(isTaskOverdue).length,
+      blocked: active.filter(t => getOperationalState(t) === "blocked").length,
+      unassigned: active.filter(t => !t.assignedTo && !t.assignedName).length,
+      urgent: active.filter(t => t.urgency === "Crítica" || t.urgency === "Alta" || t.priority === "Alta").length,
+      ready: active.filter(isReadyToClose).length,
+    };
+  }, [tasks]);
+
+  const opsCards = useMemo(() => ([
+    { key: "overdue", label: "Vencidas", value: operationalMetrics.overdue, icon: Flame, tone: "border-red-100 bg-red-50 text-red-700" },
+    { key: "blocked", label: "Bloqueadas", value: operationalMetrics.blocked, icon: Lock, tone: "border-rose-100 bg-rose-50 text-rose-700" },
+    { key: "unassigned", label: "Sin asignar", value: operationalMetrics.unassigned, icon: User, tone: "border-slate-200 bg-white text-slate-700" },
+    { key: "urgent", label: "Alta urgencia", value: operationalMetrics.urgent, icon: Flag, tone: "border-amber-100 bg-amber-50 text-amber-700" },
+    { key: "ready", label: "Cierre pendiente", value: operationalMetrics.ready, icon: CheckCircle2, tone: "border-emerald-100 bg-emerald-50 text-emerald-700" },
+  ]), [operationalMetrics]);
 
   const overdueCount = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return tasks.filter(t => !t.archived && t.dueDate && new Date(t.dueDate) < today).length;
+    return tasks.filter(t => !t.archived && isTaskOverdue(t)).length;
   }, [tasks]);
 
   const columns = useMemo(() => {
@@ -1658,8 +1795,9 @@ export default function NoraHRKanban() {
     }
 
     if (newStatus || isReorder) {
+      const opPatch = newStatus === "Bloqueado" ? { operationalState: "blocked" } : newStatus ? { operationalState: "normal" } : {};
       if (isLocalDemo) {
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), order: Date.now() } : t));
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), ...opPatch, order: Date.now() } : t));
         if (newStatus) createLocalLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
         setActiveId(null);
         return;
@@ -1667,6 +1805,7 @@ export default function NoraHRKanban() {
       try {
         const updates = { updatedAt: serverTimestamp(), order: Date.now() };
         if (newStatus) updates.status = newStatus;
+        Object.assign(updates, opPatch);
         await updateDoc(doc(db, "boards", activeBoardId, "tasks", taskId), updates);
         if (newStatus) createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
@@ -1679,14 +1818,15 @@ export default function NoraHRKanban() {
   async function updateStatus(id, s) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
-    setDetailT(prev => prev && prev.id === id ? { ...prev, status: s, order: Date.now() } : prev);
+    const opPatch = s === "Bloqueado" ? { operationalState: "blocked" } : { operationalState: "normal" };
+    setDetailT(prev => prev && prev.id === id ? { ...prev, status: s, ...opPatch, order: Date.now() } : prev);
     if (isLocalDemo) {
-      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s, order: Date.now() } : t));
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s, ...opPatch, order: Date.now() } : t));
       createLocalLog(id, task.title, "status_changed", `${task.status} → ${s}`);
       return;
     }
     try {
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { status: s, order: Date.now(), updatedAt: serverTimestamp() });
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { status: s, ...opPatch, order: Date.now(), updatedAt: serverTimestamp() });
       createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
     } catch (e) {
       console.error("Error updating status:", e);
@@ -1733,12 +1873,17 @@ export default function NoraHRKanban() {
         urgency: f.urgency || "",
         slaHours: f.slaHours || "",
         checklist: f.checklist || makeChecklist(f.title),
+        operationalState: f.operationalState || "normal",
+        blockedReason: f.blockedReason || "",
         id: newId,
       }, ...prev]);
       createLocalLog(newId, f.title, "created", "");
       setShowAdd(false);
       setNewTaskStatus("Pendiente");
       return;
+    }
+    if (!activeBoardId) {
+      throw new Error("No hay un board activo para crear la tarea.");
     }
     try {
       const ref = await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
@@ -1761,6 +1906,8 @@ export default function NoraHRKanban() {
         urgency: f.urgency || "",
         slaHours: f.slaHours || "",
         checklist: f.checklist || makeChecklist(f.title),
+        operationalState: f.operationalState || "normal",
+        blockedReason: f.blockedReason || "",
         createdBy: user.uid,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -1770,6 +1917,7 @@ export default function NoraHRKanban() {
       setNewTaskStatus("Pendiente");
     } catch (e) {
       console.error("Error adding task:", e);
+      throw new Error(e?.message || "Firebase rechazó la creación de la tarea.");
     }
   }
 
@@ -1781,6 +1929,9 @@ export default function NoraHRKanban() {
       setEditT(null);
       return;
     }
+    if (!activeBoardId) {
+      throw new Error("No hay un board activo para editar la tarea.");
+    }
     try {
       const { id, ...data } = f;
       await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { ...data, updatedAt: serverTimestamp() });
@@ -1788,6 +1939,7 @@ export default function NoraHRKanban() {
       setEditT(null);
     } catch (e) {
       console.error("Error editing task:", e);
+      throw new Error(e?.message || "Firebase rechazó la edición de la tarea.");
     }
   }
 
@@ -1843,6 +1995,7 @@ export default function NoraHRKanban() {
       setTypeFilter("Todos");
       setSlaFilter("Todos");
       setResponsibleFilter("Todos");
+      setOpsFilter("all");
       setViewMode("board");
     }
     if (action === "my-work") {
@@ -1870,6 +2023,32 @@ export default function NoraHRKanban() {
   }, [appBoards, appActiveBoardId]);
 
   const phasesOptions = ["Todas", ...Object.keys(phaseMap)];
+  const hasActiveViewFilters =
+    searchQuery ||
+    mod !== "Todos" ||
+    prio !== "Todas" ||
+    phase !== "Todas" ||
+    systemFilter !== "Todos" ||
+    typeFilter !== "Todos" ||
+    slaFilter !== "Todos" ||
+    responsibleFilter !== "Todos" ||
+    opsFilter !== "all" ||
+    myWorkOnly ||
+    overdueOnly;
+
+  function clearViewFilters() {
+    setMyWorkOnly(false);
+    setOverdueOnly(false);
+    setSearchQuery("");
+    setMod("Todos");
+    setPrio("Todas");
+    setPhase("Todas");
+    setSystemFilter("Todos");
+    setTypeFilter("Todos");
+    setSlaFilter("Todos");
+    setResponsibleFilter("Todos");
+    setOpsFilter("all");
+  }
 
   if (loading) {
     return (
@@ -1921,12 +2100,7 @@ export default function NoraHRKanban() {
               )}
             </div>
 
-            <div className="relative ml-auto hidden min-w-[240px] flex-1 max-w-xl md:block">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search" className="h-8 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300 focus:bg-white" />
-            </div>
-
-            <div className="flex items-center gap-2">
+            <div className="ml-auto flex items-center gap-2">
               {overdueCount > 0 && !showArchived && (
                 <button onClick={() => setOverdueOnly(!overdueOnly)} className={`hidden h-8 items-center gap-1.5 rounded-xl border px-2.5 text-xs font-bold md:flex ${overdueOnly ? "border-red-200 bg-red-50 text-red-700" : "border-slate-200 bg-white text-slate-500"}`}>
                   <Flame className="h-4 w-4" /> {overdueOnly ? "Todas" : overdueCount}
@@ -1979,15 +2153,50 @@ export default function NoraHRKanban() {
         </header>
 
         <div className="mx-auto max-w-[1800px] px-3 py-3 md:px-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 md:hidden">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar..." className="h-8 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none focus:border-cyan-300" />
+          <div className="mb-3 flex flex-col gap-2">
+            <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+              <div className="relative min-w-[220px] flex-1 lg:max-w-md">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-300" />
+                <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Buscar tarea, sistema o solicitante..." className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300" />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                {appCanCreate && (
+                  <button aria-label="Crear tarea" onClick={() => openAddTask()} className="flex h-9 items-center gap-2 rounded-xl bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700 transition-colors">
+                    <Plus className="h-4 w-4" /> Nueva tarea
+                  </button>
+                )}
+                <button onClick={() => setShowFilters(!showFilters)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors md:hidden">
+                  Filtros
+                </button>
+                {hasActiveViewFilters && (
+                  <button onClick={clearViewFilters} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50">
+                    Limpiar
+                  </button>
+                )}
+                {appCanCreate && (
+                  <button aria-label={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"} title={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"} onClick={() => setDeleteMode(!deleteMode)} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}><Trash2 className="h-4 w-4" /></button>
+                )}
+                <span className="hidden text-xs font-bold text-slate-400 md:inline">{displayedTasks.length} tareas</span>
+              </div>
             </div>
-            <button onClick={() => setShowFilters(!showFilters)} className="md:hidden rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors">
-              Filtros
-            </button>
-            <div className={`${showFilters ? "flex" : "hidden"} md:flex flex-wrap items-center gap-2 w-full md:w-auto`}>
+
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              {opsCards.map(({ key, label, value, icon: Icon, tone }) => (
+                <button
+                  key={key}
+                  onClick={() => setOpsFilter(opsFilter === key ? "all" : key)}
+                  className={`flex items-center justify-between rounded-xl border px-3 py-2 text-left transition-all ${opsFilter === key ? `${tone} ring-2 ring-cyan-200` : "border-slate-200 bg-white text-slate-600 hover:border-cyan-200"}`}
+                >
+                  <span className="flex items-center gap-2 text-xs font-black uppercase">
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </span>
+                  <span className="text-lg font-black">{value}</span>
+                </button>
+              ))}
+            </div>
+
+            <div className={`${showFilters ? "grid" : "hidden"} grid-cols-2 gap-2 md:grid md:grid-cols-[repeat(8,minmax(0,auto))] md:items-center`}>
               <select value={mod} onChange={e => setMod(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -2013,38 +2222,38 @@ export default function NoraHRKanban() {
                   </select>
                 </>
               )}
-              {appCanCreate && (
-                <>
-                  <button aria-label="Crear tarea" title="Crear tarea" onClick={() => openAddTask()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"><Plus className="h-4 w-4" /></button>
-                  <button aria-label={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"} title={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"} onClick={() => setDeleteMode(!deleteMode)} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}><Trash2 className="h-4 w-4" /></button>
-                </>
-              )}
             </div>
           </div>
 
           {viewMode === "list" ? (
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="grid grid-cols-[1fr_140px_120px_120px_90px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase text-slate-400">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="grid min-w-[1040px] grid-cols-[1fr_150px_130px_120px_120px_120px_120px] gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 text-xs font-black uppercase text-slate-400">
                 <span>Tarea</span>
-                <span>Módulo</span>
+                <span>Responsable</span>
+                <span>Sistema</span>
+                <span>SLA</span>
+                <span>Vence</span>
                 <span>Estado</span>
                 <span>Prioridad</span>
-                <span>Esfuerzo</span>
               </div>
               <div className="divide-y divide-slate-100">
                 {displayedTasks.map(task => {
                   const S = statusMeta[task.status]?.icon || Circle;
                   const P = priorityMeta[task.priority]?.icon || Flag;
+                  const op = operationalStates[getOperationalState(task)] || operationalStates.normal;
+                  const Op = op.icon;
                   return (
-                    <button key={task.id} onClick={() => setDetailT(task)} className="grid w-full grid-cols-[1fr_140px_120px_120px_90px] gap-3 px-4 py-3 text-left text-sm hover:bg-slate-50">
+                    <button key={task.id} onClick={() => setDetailT(task)} className="grid min-w-[1040px] w-full grid-cols-[1fr_150px_130px_120px_120px_120px_120px] gap-3 px-4 py-3 text-left text-sm hover:bg-slate-50">
                       <span className="min-w-0">
                         <span className="block truncate font-bold text-slate-900">{task.title}</span>
-                        <span className="block truncate text-xs text-slate-400">{task.description || "Sin descripción"}</span>
+                        <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-400"><Op className="h-3.5 w-3.5" />{op.label}</span>
                       </span>
-                      <span className="truncate text-slate-600">{task.module}</span>
+                      <span className="truncate font-semibold text-slate-600">{task.assignedName || "Sin asignar"}</span>
+                      <span className="truncate text-slate-600">{task.system || "Sin sistema"}</span>
+                      <span className="font-semibold text-slate-600">{task.slaHours ? `${task.slaHours}h` : "Sin SLA"}</span>
+                      <span className={`font-semibold ${isTaskOverdue(task) ? "text-red-600" : "text-slate-500"}`}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha"}</span>
                       <span className="flex items-center gap-1.5 font-semibold text-slate-600"><S className="h-4 w-4" />{task.status}</span>
                       <span className="flex items-center gap-1.5 font-semibold text-slate-600"><P className="h-4 w-4" />{task.priority}</span>
-                      <span className="text-slate-500">{task.effort}</span>
                     </button>
                   );
                 })}
