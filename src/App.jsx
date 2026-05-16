@@ -20,7 +20,6 @@ import {
   Lock,
   MessageSquare,
   MoreVertical,
-  Pencil,
   Plus,
   RefreshCw,
   Save,
@@ -208,11 +207,6 @@ const statusMeta = {
   Hecho: { icon: CheckCircle2, tone: "text-emerald-600", soft: "bg-emerald-50 text-emerald-700 border-emerald-100", accent: "bg-emerald-500" },
 };
 
-const tabClass = (active) =>
-  `flex h-8 items-center justify-center rounded-lg px-4 text-sm font-bold transition-colors ${
-    active ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500 hover:bg-white/70 hover:text-slate-800"
-  }`;
-
 function Avatar({ name, size = "sm" }) {
   const dim = size === "lg" ? "h-11 w-11 text-base" : "h-7 w-7 text-xs";
   return (
@@ -244,47 +238,70 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const checklist = checklistProgress(task);
   const isBlocked = task.status === "Bloqueado";
   const isCritical = task.urgency === "Crítica";
+  const slaTone = task.slaHours ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-slate-50 text-slate-400";
+  const impactTone = task.impact === "Crítico" || task.impact === "Alto" ? "border-red-100 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-600";
+  const urgencyTone = task.urgency === "Crítica" || task.urgency === "Alta" ? "border-amber-100 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600";
+  const badgeBase = "inline-flex min-h-[24px] max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold leading-none";
+
+  function CardBadge({ icon: Icon, children, className = "" }) {
+    return (
+      <span className={`${badgeBase} ${className}`}>
+        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+        <span className="truncate">{children}</span>
+      </span>
+    );
+  }
+
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="flex min-w-0 flex-1 items-center gap-1.5 pr-7 text-[13px] font-semibold leading-snug text-slate-900">
-          <PriorityIcon className={`inline-block h-3.5 w-3.5 shrink-0 ${meta.tone.split(" ")[0]}`} />
-          <span className="truncate">{task.title}</span>
-          {isBlocked && <Lock className="inline-block h-3 w-3 shrink-0 text-red-500" />}
+        <h3 className="flex min-w-0 flex-1 items-start gap-2 pr-7 text-[14px] font-bold leading-snug text-slate-950">
+          <PriorityIcon className={`mt-0.5 h-4 w-4 shrink-0 ${meta.tone.split(" ")[0]}`} />
+          <span className="line-clamp-2">{task.title}</span>
+          {isBlocked && <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />}
         </h3>
       </div>
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+
+      <div className="flex flex-wrap gap-1.5">
+        <CardBadge icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system || "Sin sistema"}</CardBadge>
+        <CardBadge className="border-slate-200 bg-white text-slate-700">{task.ticketType || "Sin tipo"}</CardBadge>
+        <div className="min-w-0">
           {isAdmin ? (
             <select value={task.module} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { module: e.target.value }); }}
+              onPointerDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}
-              className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium outline-none ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+              className={`min-h-[24px] max-w-[132px] rounded-md border px-2 py-1 text-[11px] font-semibold outline-none ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
               {modules.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           ) : (
-            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+            <span className={`${badgeBase} ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
               <Tag className="h-3 w-3" />{task.module}
             </span>
           )}
+        </div>
+        <div className="min-w-0">
           {isAdmin ? (
             <select value={task.phase} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { phase: e.target.value }); }}
+              onPointerDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}
-              className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium outline-none ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
+              className={`min-h-[24px] rounded-md border px-2 py-1 text-[11px] font-semibold outline-none ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
               {Object.entries(phaseMap).map(([k]) => <option key={k} value={k}>{k}</option>)}
             </select>
           ) : (
-            <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
+            <span className={`${badgeBase} ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
               {task.phase}
             </span>
           )}
-          {checklist.total > 0 && (
-            <span className="inline-flex items-center gap-1 text-[10px] text-slate-500">
-              <CheckCircle2 className="h-3 w-3" />
-              {checklist.done}/{checklist.total}
-            </span>
-          )}
-          {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         </div>
+        <CardBadge icon={PriorityIcon} className={meta.tone}>{task.priority || "Prioridad"}</CardBadge>
+      </div>
+
+      <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
+        <CardBadge icon={Gauge} className={impactTone}>Impacto: {task.impact || "N/D"}</CardBadge>
+        <CardBadge icon={Flame} className={urgencyTone}>Urgencia: {task.urgency || "N/D"}</CardBadge>
+        <CardBadge icon={Clock3} className={slaTone}>{task.slaHours ? `${task.slaHours}h SLA` : "Sin SLA"}</CardBadge>
+        <CardBadge icon={CheckCircle2} className="border-slate-200 bg-slate-50 text-slate-600">{checklist.done}/{checklist.total}</CardBadge>
+        {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         <div className="flex shrink-0 items-center">
           {task.assignedName ? (
             <Avatar name={task.assignedName} />
@@ -300,7 +317,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
 }
 
 function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
   const overdue = task.dueDate && new Date(task.dueDate) < new Date();
@@ -312,18 +329,23 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
   else if (overdue) borderClass = "border-l-4 border-l-orange-400";
   else if (isCritical) borderClass = "border-l-4 border-l-rose-400";
 
+  function openCard(e) {
+    if (deleteMode) return;
+    const tag = e.target?.tagName;
+    if (["BUTTON", "INPUT", "SELECT", "TEXTAREA", "OPTION"].includes(tag)) return;
+    onSelect(task);
+  }
+
   return (
-    <div ref={setNodeRef} style={s} {...listeners}
-      onClick={(deleteMode ? undefined : () => onSelect(task))}
-      className={`group relative rounded-lg border border-slate-200/80 bg-white p-3 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
+    <div ref={setNodeRef} style={s} {...attributes} {...listeners}
+      onClick={openCard}
+      className={`group relative rounded-lg border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
       {isAdmin && !deleteMode && (
         <button
           type="button"
           aria-label="Arrastrar tarea"
-          ref={setActivatorNodeRef}
           onClick={(e) => e.stopPropagation()}
           className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
-          {...attributes}
         >
           <MoreVertical className="h-3.5 w-3.5" />
         </button>
@@ -350,7 +372,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
   const StatusIcon = colAccents.icon;
 
   return (
-    <div className="min-w-[260px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm md:min-w-0">
+    <div className="min-w-[340px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm md:min-w-0">
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
           <button onClick={() => toggleCollapse(status)} className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700">
@@ -521,7 +543,7 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
   );
 }
 
-function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false }) {
+function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false }) {
   const [logs, setLogs] = useState([]);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -659,10 +681,9 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     restored: "restauró esta tarea",
   };
 
-  function editFromDetail(tab = "details") {
-    setActiveTab(tab);
-    onEdit(task);
-    onClose();
+  function updateField(field, value) {
+    if (!isAdmin) return;
+    onTaskPatch?.(task.id, { [field]: value });
   }
 
   function patchChecklist(checklist) {
@@ -679,270 +700,363 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
     patchChecklist([...(task.checklist || []), { id: `check-${Date.now()}`, text: text.trim(), done: false }]);
   }
 
+  function updateChecklistItem(id, text) {
+    patchChecklist((task.checklist || []).map(item => item.id === id ? { ...item, text } : item));
+  }
+
+  function removeChecklistItem(id) {
+    patchChecklist((task.checklist || []).filter(item => item.id !== id));
+  }
+
+  function goToSection(id, tab = "details") {
+    setActiveTab(tab);
+    window.setTimeout(() => {
+      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 60);
+  }
+
   const checklist = checklistProgress(task);
 
+  const mutedInput = "w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400";
+  const readonlyText = "mt-1 truncate text-xs font-bold text-slate-700";
+
+  const commentsPanel = (
+    <div className="flex min-h-[420px] flex-col bg-white">
+      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <div>
+          <h3 className="text-sm font-bold text-slate-900">Actividad</h3>
+          <p className="text-xs text-slate-400">{comments.length} comentarios · {logs.length} eventos</p>
+        </div>
+        <MessageSquare className="h-5 w-5 text-slate-300" />
+      </div>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">
+        {comments.map(c => (
+          <div key={c.id} className="flex gap-3">
+            <Avatar name={c.userName} />
+            <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-4 py-3">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="truncate text-sm font-bold text-slate-800">{c.userName}</span>
+                <span className="shrink-0 text-[10px] text-slate-400">{formatTimestamp(c.createdAt)}</span>
+              </div>
+              <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{c.text}</p>
+            </div>
+          </div>
+        ))}
+
+        {logs.map(l => (
+          <div key={l.id} className="flex gap-3 text-sm">
+            <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-cyan-300" />
+            <div>
+              <span className="font-semibold text-slate-700">{l.userName}</span>{" "}
+              <span className="text-slate-500">{actionLabels[l.action] || l.action}</span>
+              {l.details && <span className="text-slate-400"> · {l.details}</span>}
+              <span className="ml-1 text-xs text-slate-300">{formatTimestamp(l.createdAt)}</span>
+            </div>
+          </div>
+        ))}
+
+        {comments.length === 0 && logs.length === 0 && (
+          <div className="flex h-full min-h-[300px] flex-col items-center justify-center text-center text-slate-300">
+            <MessageSquare className="mb-3 h-12 w-12" />
+            <p className="text-sm font-semibold">No hay actividad todavía</p>
+            <p className="mt-1 max-w-sm text-sm">Comenta o cambia el estado para iniciar la conversación.</p>
+          </div>
+        )}
+      </div>
+      <form onSubmit={sendComment} className="m-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+        <MessageSquare className="ml-2 h-4 w-4 text-slate-300" />
+        <input
+          value={commentText}
+          onChange={e => setCommentText(e.target.value)}
+          placeholder="Comenta o menciona contexto para esta tarea..."
+          className="min-w-0 flex-1 bg-transparent px-2 py-2 text-xs outline-none placeholder:text-slate-300"
+        />
+        <button disabled={!commentText.trim()} className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-600 text-white transition-colors hover:bg-cyan-700 disabled:bg-slate-200">
+          <Send className="h-4 w-4" />
+        </button>
+      </form>
+    </div>
+  );
+
   return (
-    <div className="flex h-[88vh] min-h-[560px] flex-col overflow-hidden rounded-2xl bg-white text-slate-900">
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-3">
-        <div className="flex min-w-0 items-center gap-2 rounded-xl bg-slate-100 p-1">
+    <div className="flex h-[92vh] min-h-[620px] flex-col overflow-hidden rounded-2xl bg-white text-slate-900">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4">
+        <div className="flex min-w-0 items-center gap-1">
           {[
-            ["details", "Detalles"],
-            ["activity", "Actividad"],
+            ["details", "Card details"],
+            ["activity", "Activity"],
             ["timing", "Timing"],
           ].map(([key, label]) => (
-            <button key={key} onClick={() => setActiveTab(key)} className={tabClass(activeTab === key)}>
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              className={`h-14 border-b-2 px-4 text-sm font-bold transition-colors ${activeTab === key ? "border-cyan-600 text-slate-900" : "border-transparent text-slate-400 hover:text-slate-700"}`}
+            >
               {label}
             </button>
           ))}
         </div>
-        <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-white hover:text-slate-700">
-          <X className="h-5 w-5" />
+        <div className="flex items-center gap-1">
+          <button onClick={() => setActiveTab("activity")} className="flex h-9 w-9 items-center justify-center rounded-lg text-slate-300 hover:bg-slate-50 hover:text-slate-700">
+            <MessageSquare className="h-5 w-5" />
+          </button>
+          <button onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-50 hover:text-slate-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-slate-100/80 px-4 py-3">
+        <button
+          onClick={() => onStatus(task.id, task.status === "Hecho" ? "En progreso" : "Hecho")}
+          className="flex items-center gap-3 rounded-xl bg-white px-4 py-2 text-sm font-black text-slate-800 shadow-sm hover:bg-slate-50"
+        >
+          <span className={`flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-black ${task.status === "Hecho" ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-emerald-600"}`}>
+            {progress}
+          </span>
+          {task.status === "Hecho" ? "Reopen" : "Mark as done"}
         </button>
+        <div className="flex items-center gap-2 text-slate-400">
+          {isAdmin && (
+            <button onClick={() => onArchive(task.id, !task.archived)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-slate-700" title={task.archived ? "Restaurar" : "Archivar"}>
+              <Archive className="h-5 w-5" />
+            </button>
+          )}
+          {isAdmin && (
+            <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-red-600" title="Eliminar">
+              <Trash2 className="h-5 w-5" />
+            </button>
+          )}
+          <button onClick={() => setActiveTab("details")} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-slate-700" title="Detalles">
+            <Settings className="h-5 w-5" />
+          </button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col bg-slate-100/70 lg:flex-row">
-        <main className="min-h-0 flex-1 overflow-y-auto p-4 md:p-6">
+        <main className="min-h-0 flex-1 overflow-y-auto">
           {activeTab === "details" && (
-            <div className="mx-auto max-w-3xl space-y-5">
-              <div className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-start gap-3">
-                    <Avatar name={task.assignedName || detailUserData?.name || detailUser?.email} size="lg" />
-                    <div>
-                      <p className="text-xs font-semibold text-slate-400">{task.updatedAt ? `Actualizada ${formatTimestamp(task.updatedAt)}` : "Detalle de tarea"}</p>
-                      <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-950">{task.title}</h2>
-                    </div>
-                  </div>
-                  <FieldPill icon={StatusIcon} className={status.soft}>{task.status}</FieldPill>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <FieldPill icon={PriorityIcon} className={priority.tone}>{task.priority}</FieldPill>
-                  {isAdmin ? (
-                    <>
-                      <select value={task.system || ""} onChange={e => onTaskPatch?.(task.id, { system: e.target.value })}
-                        className="rounded-md border border-cyan-100 bg-cyan-50 px-2 py-1 text-[10px] font-medium text-cyan-700 outline-none">
-                        {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
-                      <select value={task.ticketType || ""} onChange={e => onTaskPatch?.(task.id, { ticketType: e.target.value })}
-                        className="rounded-md border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] font-medium text-slate-600 outline-none">
-                        {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
-                    </>
-                  ) : (
-                    <>
-                      <FieldPill icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system || "Sistema sin definir"}</FieldPill>
-                      <FieldPill className="border-slate-200 bg-slate-50 text-slate-600">{task.ticketType || "Tipo sin definir"}</FieldPill>
-                    </>
-                  )}
-                  <FieldPill icon={Tag} className={`${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>{task.module}</FieldPill>
-                  <FieldPill className={`${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>{task.phase} - {phaseMap[task.phase]}</FieldPill>
-                  <FieldPill icon={Gauge} className="border-slate-200 bg-slate-50 text-slate-600">{task.effort}</FieldPill>
-                </div>
-                <div className="grid gap-3 md:grid-cols-4">
-                  {isAdmin ? (
-                    <>
-                      <InlineField label="Solicitante">
-                        <input value={task.requester || ""} onChange={e => onTaskPatch?.(task.id, { requester: e.target.value })}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400" />
-                      </InlineField>
-                      <InlineField label="Impacto">
-                        <select value={task.impact || ""} onChange={e => onTaskPatch?.(task.id, { impact: e.target.value })}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400">
-                          {itConfig.impacts.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </InlineField>
-                      <InlineField label="Urgencia">
-                        <select value={task.urgency || ""} onChange={e => onTaskPatch?.(task.id, { urgency: e.target.value })}
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400">
-                          {itConfig.urgencies.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
-                      </InlineField>
-                      <InlineField label="SLA">
-                        <input value={task.slaHours || ""} onChange={e => onTaskPatch?.(task.id, { slaHours: Number(e.target.value) || "" })}
-                          type="number" min="1" placeholder="Horas"
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-cyan-400" />
-                        {slaCompliance && (
-                          <span className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${slaCompliance.color}`}>
-                            {slaCompliance.label}
-                          </span>
+            <div className="grid min-h-full lg:grid-cols-[minmax(360px,42%)_1fr]">
+              <div className="border-r border-slate-200 bg-white">
+                <section className="space-y-5 p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <Avatar name={task.assignedName || detailUserData?.name || detailUser?.email} size="lg" />
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-semibold text-slate-400">{task.updatedAt ? `Actualizada ${formatTimestamp(task.updatedAt)}` : "Detalle de tarea"}</p>
+                        {isAdmin ? (
+                          <textarea
+                            value={task.title || ""}
+                            onChange={e => updateField("title", e.target.value)}
+                            rows={2}
+                            className="mt-1 w-full resize-none rounded-lg border border-transparent bg-transparent px-1 text-2xl font-bold leading-tight text-slate-950 outline-none hover:border-slate-200 focus:border-cyan-400"
+                          />
+                        ) : (
+                          <h2 className="mt-1 text-2xl font-bold leading-tight text-slate-950">{task.title}</h2>
                         )}
-                      </InlineField>
-                    </>
-                  ) : (
-                    <>
-                      {[
-                        ["Solicitante", task.requester || "Sin definir"],
-                        ["Impacto", task.impact || "Sin definir"],
-                        ["Urgencia", task.urgency || "Sin definir"],
-                        ["SLA", task.slaHours ? `${task.slaHours}h` : "Sin definir"],
-                      ].map(([label, value]) => (
-                        <InlineField key={label} label={label}>
-                          <p className="mt-1 truncate text-xs font-bold text-slate-700">{value}</p>
-                        </InlineField>
-                      ))}
-                    </>
-                  )}
-                </div>
-                <div className="rounded-xl border border-slate-200">
-                  <div className="border-b border-slate-200 px-4 py-3">
-                    <h3 className="text-xs font-bold uppercase text-slate-400">Descripción</h3>
-                  </div>
-                  <p className="min-h-[96px] px-4 py-4 text-sm leading-7 text-slate-600">{task.description || "Sin descripción"}</p>
-                </div>
-              </div>
-
-              <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                  <h3 className="text-sm font-bold text-slate-900">Assignees</h3>
-                  <Users className="h-4 w-4 text-slate-300" />
-                </div>
-                <div className="p-5">
-                  {isLocal ? (
-                    <select
-                      value={task.assignedName || ""}
-                      onChange={e => {
-                        const name = e.target.value;
-                        onTaskPatch?.(task.id, { assignedName: name, assignedTo: name ? `local-${name}` : "" });
-                      }}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400"
-                    >
-                      <option value="">Sin asignar</option>
-                      {itConfig.team.map(v => <option key={v} value={v}>{v}</option>)}
-                    </select>
-                  ) : isAdmin && users?.length > 0 ? (
-                    <select
-                      value={task.assignedTo || ""}
-                      onChange={async (e) => {
-                        const userId = e.target.value;
-                        const u = users.find(uu => uu.id === userId);
-                        try {
-                          await updateDoc(doc(db, "boards", activeBoardId, "tasks", task.id), {
-                            assignedTo: userId,
-                            assignedName: u ? u.name : "",
-                            updatedAt: serverTimestamp(),
-                          });
-                        } catch (err) {
-                          console.error("Error assigning task:", err);
-                        }
-                      }}
-                      className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 outline-none focus:border-cyan-400"
-                    >
-                      <option value="">Sin asignar</option>
-                      {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
-                    </select>
-                  ) : (
-                    <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
-                      {task.assignedName ? <Avatar name={task.assignedName} /> : <User className="h-5 w-5 text-slate-300" />}
-                      <span className="text-sm font-semibold text-slate-700">{task.assignedName || "Sin asignar"}</span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </section>
+                    <FieldPill icon={StatusIcon} className={status.soft}>{task.status}</FieldPill>
+                  </div>
 
-              <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900">Checklist</h3>
-                    <p className="text-xs text-slate-400">{checklist.done}/{checklist.total} completado</p>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <InlineField label="List">
+                      {isAdmin ? (
+                        <select value={task.status || "Pendiente"} onChange={e => onStatus(task.id, e.target.value)} className={mutedInput}>
+                          {statuses.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      ) : <p className={readonlyText}>{task.status}</p>}
+                    </InlineField>
+                    <InlineField label="Priority">
+                      {isAdmin ? (
+                        <select value={task.priority || "Media"} onChange={e => updateField("priority", e.target.value)} className={mutedInput}>
+                          {Object.keys(priorityMeta).map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      ) : <p className={readonlyText}>{task.priority}</p>}
+                    </InlineField>
+                    <InlineField label="System">
+                      {isAdmin ? (
+                        <select value={task.system || ""} onChange={e => updateField("system", e.target.value)} className={mutedInput}>
+                          <option value="">Sin definir</option>
+                          {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      ) : <p className={readonlyText}>{task.system || "Sin definir"}</p>}
+                    </InlineField>
+                    <InlineField label="Type">
+                      {isAdmin ? (
+                        <select value={task.ticketType || ""} onChange={e => updateField("ticketType", e.target.value)} className={mutedInput}>
+                          <option value="">Sin definir</option>
+                          {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                        </select>
+                      ) : <p className={readonlyText}>{task.ticketType || "Sin definir"}</p>}
+                    </InlineField>
                   </div>
-                  {isAdmin && <button onClick={addChecklistItem} className="flex h-8 items-center gap-1 rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white"><Plus className="h-3.5 w-3.5" />Item</button>}
-                </div>
-                <div className="space-y-2 p-5">
-                  {(task.checklist || []).map(item => (
-                    <button key={item.id} onClick={() => isAdmin && toggleCheckItem(item.id)} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-left hover:bg-slate-50">
-                      <span className={`flex h-5 w-5 items-center justify-center rounded-full border ${item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                      </span>
-                      <span className={`text-sm font-semibold ${item.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{item.text}</span>
-                    </button>
-                  ))}
-                  {(!task.checklist || task.checklist.length === 0) && <p className="text-sm text-slate-400">Sin checklist todavía.</p>}
-                </div>
-              </section>
 
-              <section className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">Start & Due date</h3>
-                    <Calendar className="h-4 w-4 text-slate-300" />
+                  <div id="task-description" className="rounded-xl border border-slate-200">
+                    <div className="border-b border-slate-200 px-4 py-3">
+                      <h3 className="text-xs font-bold uppercase text-slate-400">Description</h3>
+                    </div>
+                    {isAdmin ? (
+                      <textarea
+                        value={task.description || ""}
+                        onChange={e => updateField("description", e.target.value)}
+                        rows={4}
+                        placeholder="Add description"
+                        className="min-h-[116px] w-full resize-none rounded-b-xl bg-white px-4 py-4 text-sm leading-7 text-slate-600 outline-none placeholder:text-slate-300 focus:bg-slate-50"
+                      />
+                    ) : (
+                      <p className="min-h-[96px] px-4 py-4 text-sm leading-7 text-slate-600">{task.description || "Sin descripción"}</p>
+                    )}
                   </div>
-                  <p className="text-sm font-semibold text-slate-700">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha límite"}</p>
-                  {task.dueDate && <div className="mt-2 text-xs"><DueDateBadge dueDate={task.dueDate} /></div>}
-                </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="mb-3 flex items-center justify-between">
-                    <h3 className="text-sm font-bold text-slate-900">Attachments</h3>
-                    <Plus className="h-4 w-4 text-slate-300" />
-                  </div>
-                  <p className="text-sm text-slate-400">Sin adjuntos por ahora</p>
-                </div>
-              </section>
+
+                  <section id="task-assignees" className="scroll-mt-4 border-t border-slate-200 pt-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-black text-slate-900">Assignees</h3>
+                      <Users className="h-5 w-5 text-slate-300" />
+                    </div>
+                    {isLocal ? (
+                      <select
+                        value={task.assignedName || ""}
+                        onChange={e => {
+                          const name = e.target.value;
+                          onTaskPatch?.(task.id, { assignedName: name, assignedTo: name ? `local-${name}` : "" });
+                        }}
+                        className={mutedInput}
+                      >
+                        <option value="">Sin asignar</option>
+                        {itConfig.team.map(v => <option key={v} value={v}>{v}</option>)}
+                      </select>
+                    ) : isAdmin && users?.length > 0 ? (
+                      <select
+                        value={task.assignedTo || ""}
+                        onChange={e => {
+                          const userId = e.target.value;
+                          const u = users.find(uu => uu.id === userId);
+                          onTaskPatch?.(task.id, { assignedTo: userId, assignedName: u ? u.name : "" });
+                        }}
+                        className={mutedInput}
+                      >
+                        <option value="">Sin asignar</option>
+                        {users.map(u => <option key={u.id} value={u.id}>{u.name} ({u.email})</option>)}
+                      </select>
+                    ) : (
+                      <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
+                        {task.assignedName ? <Avatar name={task.assignedName} /> : <User className="h-5 w-5 text-slate-300" />}
+                        <span className="text-sm font-semibold text-slate-700">{task.assignedName || "Sin asignar"}</span>
+                      </div>
+                    )}
+                  </section>
+
+                  <section id="task-dates" className="scroll-mt-4 border-t border-slate-200 pt-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Start & Due date</h3>
+                        <p className="text-xs text-slate-400">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha límite"}</p>
+                      </div>
+                      <Calendar className="h-5 w-5 text-slate-300" />
+                    </div>
+                    {isAdmin ? (
+                      <input type="date" value={task.dueDate || ""} onChange={e => updateField("dueDate", e.target.value)} className={mutedInput} />
+                    ) : task.dueDate ? (
+                      <DueDateBadge dueDate={task.dueDate} />
+                    ) : (
+                      <p className="text-sm text-slate-400">Sin fecha límite</p>
+                    )}
+                  </section>
+
+                  <section id="task-checklist" className="scroll-mt-4 border-t border-slate-200 pt-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-900">Checklist</h3>
+                        <p className="text-xs text-slate-400">{checklist.done}/{checklist.total} completado</p>
+                      </div>
+                      {isAdmin && <button onClick={addChecklistItem} className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-200 text-slate-500 hover:bg-cyan-600 hover:text-white"><Plus className="h-4 w-4" /></button>}
+                    </div>
+                    <div className="space-y-2">
+                      {(task.checklist || []).map(item => (
+                        <div key={item.id} className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                          <button type="button" onClick={() => isAdmin && toggleCheckItem(item.id)} className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${item.done ? "border-emerald-500 bg-emerald-500 text-white" : "border-slate-300 text-transparent"}`}>
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                          </button>
+                          {isAdmin ? (
+                            <input value={item.text} onChange={e => updateChecklistItem(item.id, e.target.value)} className={`min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none ${item.done ? "text-slate-400 line-through" : "text-slate-700"}`} />
+                          ) : (
+                            <span className={`min-w-0 flex-1 text-sm font-semibold ${item.done ? "text-slate-400 line-through" : "text-slate-700"}`}>{item.text}</span>
+                          )}
+                          {isAdmin && <button onClick={() => removeChecklistItem(item.id)} className="text-slate-300 hover:text-red-500"><X className="h-4 w-4" /></button>}
+                        </div>
+                      ))}
+                      {(!task.checklist || task.checklist.length === 0) && <p className="text-sm text-slate-400">Sin checklist todavía.</p>}
+                    </div>
+                  </section>
+
+                  <section id="task-properties" className="scroll-mt-4 border-t border-slate-200 pt-5">
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-black text-slate-900">Custom properties</h3>
+                      <SlidersHorizontal className="h-5 w-5 text-slate-300" />
+                    </div>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {isAdmin ? (
+                        <>
+                          <InlineField label="Module">
+                            <select value={task.module || ""} onChange={e => updateField("module", e.target.value)} className={mutedInput}>
+                              {modules.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </InlineField>
+                          <InlineField label="Phase">
+                            <select value={task.phase || "V1"} onChange={e => updateField("phase", e.target.value)} className={mutedInput}>
+                              {Object.keys(phaseMap).map(v => <option key={v} value={v}>{v} - {phaseMap[v]}</option>)}
+                            </select>
+                          </InlineField>
+                          <InlineField label="Impact">
+                            <select value={task.impact || ""} onChange={e => updateField("impact", e.target.value)} className={mutedInput}>
+                              <option value="">Sin definir</option>
+                              {itConfig.impacts.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </InlineField>
+                          <InlineField label="Urgency">
+                            <select value={task.urgency || ""} onChange={e => updateField("urgency", e.target.value)} className={mutedInput}>
+                              <option value="">Sin definir</option>
+                              {itConfig.urgencies.map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </InlineField>
+                          <InlineField label="Effort">
+                            <select value={task.effort || "Medio"} onChange={e => updateField("effort", e.target.value)} className={mutedInput}>
+                              {Object.keys(effortWeight).map(v => <option key={v} value={v}>{v}</option>)}
+                            </select>
+                          </InlineField>
+                          <InlineField label="SLA hours">
+                            <input value={task.slaHours || ""} onChange={e => updateField("slaHours", Number(e.target.value) || "")} type="number" min="1" className={mutedInput} />
+                          </InlineField>
+                        </>
+                      ) : (
+                        <>
+                          {[
+                            ["Module", task.module || "Sin definir"],
+                            ["Phase", task.phase ? `${task.phase} - ${phaseMap[task.phase]}` : "Sin definir"],
+                            ["Impact", task.impact || "Sin definir"],
+                            ["Urgency", task.urgency || "Sin definir"],
+                            ["Effort", task.effort || "Sin definir"],
+                            ["SLA", task.slaHours ? `${task.slaHours}h` : "Sin definir"],
+                          ].map(([label, value]) => (
+                            <InlineField key={label} label={label}><p className={readonlyText}>{value}</p></InlineField>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </section>
+                </section>
+              </div>
+              <div className="min-h-0 p-4">{commentsPanel}</div>
             </div>
           )}
 
           {activeTab === "activity" && (
-            <div className="mx-auto flex min-h-full max-w-3xl flex-col">
-              <div className="flex-1 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="mb-5 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-lg font-bold text-slate-950">Actividad</h3>
-                    <p className="text-sm text-slate-400">{comments.length} comentarios · {logs.length} eventos</p>
-                  </div>
-                  <MessageSquare className="h-5 w-5 text-slate-300" />
-                </div>
-
-                <div className="space-y-4">
-                  {comments.map(c => (
-                    <div key={c.id} className="flex gap-3">
-                      <Avatar name={c.userName} />
-                      <div className="min-w-0 flex-1 rounded-xl bg-slate-50 px-4 py-3">
-                        <div className="mb-1 flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-bold text-slate-800">{c.userName}</span>
-                          <span className="shrink-0 text-[10px] text-slate-400">{formatTimestamp(c.createdAt)}</span>
-                        </div>
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-slate-600">{c.text}</p>
-                      </div>
-                    </div>
-                  ))}
-
-                  {logs.map(l => (
-                    <div key={l.id} className="flex gap-3 text-sm">
-                      <span className="mt-2 h-2 w-2 shrink-0 rounded-full bg-cyan-300" />
-                      <div>
-                        <span className="font-semibold text-slate-700">{l.userName}</span>{" "}
-                        <span className="text-slate-500">{actionLabels[l.action] || l.action}</span>
-                        {l.details && <span className="text-slate-400"> · {l.details}</span>}
-                        <span className="ml-1 text-xs text-slate-300">{formatTimestamp(l.createdAt)}</span>
-                      </div>
-                    </div>
-                  ))}
-
-                  {comments.length === 0 && logs.length === 0 && (
-                    <div className="flex min-h-[260px] flex-col items-center justify-center text-center text-slate-300">
-                      <MessageSquare className="mb-3 h-12 w-12" />
-                      <p className="text-sm font-semibold">No hay actividad todavía</p>
-                      <p className="mt-1 max-w-sm text-sm">Comenta o cambia el estado para iniciar la conversación.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <form onSubmit={sendComment} className="mt-4 flex items-center gap-2 rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-                <MessageSquare className="ml-2 h-4 w-4 text-slate-300" />
-                <input
-                  value={commentText}
-                  onChange={e => setCommentText(e.target.value)}
-                  placeholder="Comenta o menciona contexto para esta tarea..."
-                  className="min-w-0 flex-1 bg-transparent px-2 py-2 text-xs outline-none placeholder:text-slate-300"
-                />
-                <button disabled={!commentText.trim()} className="flex h-9 w-9 items-center justify-center rounded-lg bg-cyan-600 text-white transition-colors hover:bg-cyan-700 disabled:bg-slate-200">
-                  <Send className="h-4 w-4" />
-                </button>
-              </form>
-            </div>
+            <div className="mx-auto max-w-4xl p-4">{commentsPanel}</div>
           )}
 
           {activeTab === "timing" && (
-            <div className="mx-auto max-w-3xl space-y-5">
+            <div className="mx-auto max-w-4xl space-y-5 p-4 md:p-6">
               <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center justify-between">
                   <h3 className="text-lg font-bold text-slate-950">Timing</h3>
@@ -956,35 +1070,17 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
                   <div className={`h-full rounded-full ${status.accent}`} style={{ width: `${progress}%` }} />
                 </div>
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase text-slate-400">Fecha límite</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha"}</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase text-slate-400">Última actualización</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.updatedAt ? formatTimestamp(task.updatedAt) : "Sin registro"}</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase text-slate-400">Creada</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.createdAt ? formatTimestamp(task.createdAt) : "Sin registro"}</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase text-slate-400">Esfuerzo</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.effort}</p>
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase text-slate-400">SLA</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800">{task.slaHours ? `${task.slaHours} horas` : "Sin definir"}</p>
-                    {slaCompliance && (
-                      <span className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${slaCompliance.color}`}>
-                        {slaCompliance.label}
-                      </span>
-                    )}
-                  </div>
-                  <div className="rounded-lg border border-slate-200 p-4">
-                    <p className="text-xs font-bold uppercase text-slate-400">Checklist</p>
-                    <p className="mt-2 text-sm font-semibold text-slate-800">{checklist.done}/{checklist.total} completado</p>
-                  </div>
+                  <InlineField label="Due date">
+                    {isAdmin ? <input type="date" value={task.dueDate || ""} onChange={e => updateField("dueDate", e.target.value)} className={mutedInput} /> : <p className={readonlyText}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha"}</p>}
+                  </InlineField>
+                  <InlineField label="Última actualización"><p className={readonlyText}>{task.updatedAt ? formatTimestamp(task.updatedAt) : "Sin registro"}</p></InlineField>
+                  <InlineField label="Creada"><p className={readonlyText}>{task.createdAt ? formatTimestamp(task.createdAt) : "Sin registro"}</p></InlineField>
+                  <InlineField label="Esfuerzo"><p className={readonlyText}>{task.effort}</p></InlineField>
+                  <InlineField label="SLA">
+                    <p className={readonlyText}>{task.slaHours ? `${task.slaHours} horas` : "Sin definir"}</p>
+                    {slaCompliance && <span className={`mt-1 inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${slaCompliance.color}`}>{slaCompliance.label}</span>}
+                  </InlineField>
+                  <InlineField label="Checklist"><p className={readonlyText}>{checklist.done}/{checklist.total} completado</p></InlineField>
                 </div>
               </section>
             </div>
@@ -1033,39 +1129,33 @@ function TaskDetail({ task, onEdit, onDelete, onClose, onStatus, isAdmin, onArch
 
             <div>
               <h4 className="mb-2 text-xs font-bold uppercase text-slate-400">Acciones</h4>
-              <div className="space-y-1">
+              <div className="space-y-2">
                 {[
-                  [PriorityIcon, "Editar prioridad", () => editFromDetail()],
-                  [Tag, "Editar etiquetas", () => editFromDetail()],
-                  [Calendar, "Editar fecha", () => editFromDetail("timing")],
-                  [Gauge, "Editar esfuerzo", () => editFromDetail("timing")],
-                  [MessageSquare, "Ver comentarios", () => setActiveTab("activity")],
-                  [Clock3, "Ver timing", () => setActiveTab("timing")],
+                  [Users, "Asignar responsable", () => goToSection("task-assignees")],
+                  [CheckCircle2, isAdmin ? "Agregar checklist" : "Ver checklist", () => { goToSection("task-checklist"); if (isAdmin) window.setTimeout(addChecklistItem, 120); }],
+                  [Calendar, "Abrir fecha / SLA", () => setActiveTab("timing")],
+                  [SlidersHorizontal, "Propiedades IT", () => goToSection("task-properties")],
+                  [MessageSquare, "Abrir comentarios", () => setActiveTab("activity")],
+                  [Clock3, "Abrir timing", () => setActiveTab("timing")],
                 ].map(([Icon, label, action]) => (
-                  <button key={label} onClick={action} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-white">
+                  <button key={label} onClick={action} className="flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-left text-sm font-semibold text-slate-600 transition-colors hover:border-cyan-200 hover:text-cyan-700">
                     <Icon className="h-4 w-4 text-slate-400" />
                     {label}
                   </button>
                 ))}
+
+                {isAdmin && (
+                  <>
+                    <button onClick={() => onArchive(task.id, !task.archived)} className="flex w-full items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-left text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100">
+                      <Archive className="h-4 w-4" /> {task.archived ? "Restaurar tarea" : "Archivar tarea"}
+                    </button>
+                    <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="flex w-full items-center gap-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-100">
+                      <Trash2 className="h-4 w-4" /> Eliminar tarea
+                    </button>
+                  </>
+                )}
               </div>
             </div>
-
-            {isAdmin && (
-              <div>
-                <h4 className="mb-2 text-xs font-bold uppercase text-slate-400">Admin</h4>
-                <div className="grid grid-cols-1 gap-2">
-                  <button onClick={() => { onEdit(task); onClose(); }} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100">
-                    <Pencil className="h-4 w-4" /> Editar
-                  </button>
-                  <button onClick={() => { onArchive(task.id, !task.archived); onClose(); }} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-amber-700 hover:bg-amber-50">
-                    <Archive className="h-4 w-4" /> {task.archived ? "Restaurar" : "Archivar"}
-                  </button>
-                  <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-red-600 hover:bg-red-50">
-                    <Trash2 className="h-4 w-4" /> Eliminar
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         </aside>
       </div>
@@ -1575,6 +1665,7 @@ export default function NoraHRKanban() {
   async function updateStatus(id, s) {
     const task = tasks.find(t => t.id === id);
     if (!task) return;
+    setDetailT(prev => prev && prev.id === id ? { ...prev, status: s, order: Date.now() } : prev);
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s, order: Date.now() } : t));
       createLocalLog(id, task.title, "status_changed", `${task.status} → ${s}`);
@@ -1685,9 +1776,9 @@ export default function NoraHRKanban() {
   }
 
   async function patchTask(id, patch) {
+    setDetailT(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
-      setDetailT(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
       const task = tasks.find(t => t.id === id);
       if (task) createLocalLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
       return;
@@ -1835,7 +1926,7 @@ export default function NoraHRKanban() {
                   </button>
                 )}
                 <button onClick={exportCSV} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Export</button>
-                <button onClick={isLocalDemo ? undefined : logout} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">{isLocalDemo ? "Demo" : "Salir"}</button>
+                {!isLocalDemo && <button onClick={logout} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">Salir</button>}
                 <Avatar name={appUserData?.name || appUser.email} />
               </div>
               <div className="relative md:hidden">
@@ -1908,8 +1999,8 @@ export default function NoraHRKanban() {
               )}
               {appCanCreate && (
                 <>
-                  <button onClick={() => openAddTask()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"><Plus className="h-4 w-4" /></button>
-                  <button onClick={() => setDeleteMode(!deleteMode)} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}><Trash2 className="h-4 w-4" /></button>
+                  <button aria-label="Crear tarea" title="Crear tarea" onClick={() => openAddTask()} className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-600 text-white hover:bg-cyan-700 transition-colors"><Plus className="h-4 w-4" /></button>
+                  <button aria-label={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"} title={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"} onClick={() => setDeleteMode(!deleteMode)} className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}><Trash2 className="h-4 w-4" /></button>
                 </>
               )}
             </div>
@@ -1947,7 +2038,7 @@ export default function NoraHRKanban() {
               </div>
             </div>
           ) : (
-            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2 md:grid md:grid-cols-4">
+            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
               {columns.map(({ status, items }) => (
                 <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} />
               ))}
@@ -1966,7 +2057,7 @@ export default function NoraHRKanban() {
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onEdit={setEditT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} />}
+          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} />}
         </ErrorBoundary>
       </Modal>
 
