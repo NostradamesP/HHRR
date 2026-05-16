@@ -167,8 +167,8 @@ function enrichLocalTask(task, idx, config = defaultItConfig) {
     order: task.order ?? idx,
     dueDate: task.dueDate || "",
     archived: Boolean(task.archived),
-    assignedTo: task.assignedTo || (idx % 3 === 0 ? "local-demo-user" : ""),
-    assignedName: task.assignedName || (idx % 3 === 0 ? "Demo NoraHR" : ""),
+    assignedTo: task.assignedTo || "local-demo-user",
+    assignedName: task.assignedName || "Demo NoraHR",
     ticketType: task.ticketType || config.ticketTypes[idx % config.ticketTypes.length],
     requester: task.requester || "Operaciones IT",
     system: task.system || config.systems[idx % config.systems.length],
@@ -1434,6 +1434,20 @@ export default function NoraHRKanban() {
           )
         );
       }
+      const adminName = userData?.name || user.email;
+      const unassigned = appIsAdmin ? ts.filter(t => !t.assignedTo && !t.assignedName) : [];
+      if (unassigned.length > 0) {
+        Promise.allSettled(
+          unassigned.map(t =>
+            updateDoc(doc(db, "boards", activeBoardId, "tasks", t.id), {
+              assignedTo: user.uid,
+              assignedName: adminName,
+              createdBy: t.createdBy || user.uid,
+              updatedAt: serverTimestamp(),
+            })
+          )
+        );
+      }
       if (snap.empty && appIsAdmin && !seeded.current[activeBoardId]) {
         seeded.current[activeBoardId] = true;
         const board = boardsRef.current.find(b => b.id === activeBoardId);
@@ -1448,8 +1462,8 @@ export default function NoraHRKanban() {
                     order: Date.now() + idx,
                     dueDate: "",
                     archived: false,
-                    assignedTo: "",
-                    assignedName: "",
+                    assignedTo: user.uid,
+                    assignedName: adminName,
                     ticketType: "",
                     requester: "Operaciones IT",
                     system: "",
@@ -1695,6 +1709,8 @@ export default function NoraHRKanban() {
   }
 
   async function addTask(f) {
+    const defaultAssigneeId = appUser?.uid || "";
+    const defaultAssigneeName = appUserData?.name || appUser?.email || "";
     if (isLocalDemo) {
       const newId = `local-${Date.now()}`;
       setTasks(prev => [{
@@ -1708,8 +1724,8 @@ export default function NoraHRKanban() {
         order: Date.now(),
         dueDate: f.dueDate || "",
         archived: false,
-        assignedTo: f.assignedTo || "",
-        assignedName: f.assignedName || "",
+        assignedTo: f.assignedTo || defaultAssigneeId,
+        assignedName: f.assignedName || defaultAssigneeName,
         ticketType: f.ticketType || "",
         requester: f.requester || "",
         system: f.system || "",
@@ -1736,8 +1752,8 @@ export default function NoraHRKanban() {
         order: Date.now(),
         dueDate: f.dueDate || "",
         archived: false,
-        assignedTo: f.assignedTo || "",
-        assignedName: f.assignedName || "",
+        assignedTo: f.assignedTo || defaultAssigneeId,
+        assignedName: f.assignedName || defaultAssigneeName,
         ticketType: f.ticketType || "",
         requester: f.requester || "",
         system: f.system || "",
