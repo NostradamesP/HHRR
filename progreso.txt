@@ -1,0 +1,83 @@
+=== PROGRESO - NoraHR Roadmap Kanban ===
+
+== Commits realizados ==
+
+1. 85ae036 - Fix: idempotent board creation, remove create board from sidebar, avatar on cards, inline assignment in TaskDetail
+2. 3f96e9c - Fix: wrap return in fragment, move tab outside DndContext
+3. fd0f6f8 - Fix: add missing limit import, remove unused imports, add favicon
+4. 458f348 - Add ErrorBoundary, sidebar tab handle, and log listener error handler
+5. 58b83f2 - Mobile responsive: horizontal column scroll, hamburger menu, collapsible filters, full-width sidebar, compact cards
+6. bdd66cb - Fix: robust board auto-creation, add deleteBoard, restore create board in sidebar
+7. c5aff5d - Add delete mode and move add/delete buttons to filter bar
+8. 6ff68b5 - Add DragOverlay, droppable columns, and CardContent extraction for drag & drop
+9. ecd20a6 - Fix: pass userMap prop to Column component
+10. 44c1517 - Fix drag: move droppable inside SortableContext as DroppableZone, keep Column as visual wrapper
+
+== Archivos modificados ==
+
+src/BoardContext.jsx:
+- Auto-creación del board "NoraHR Roadmap" ahora robusta (sin race conditions)
+- Limpieza de boards duplicados al iniciar sesión (migra tareas al principal y elimina extras)
+- deleteBoard(boardId): elimina board + todas sus tareas + logs
+- createBoard(name): validación de nombre duplicado
+- deleteBoard expuesto en el context
+
+src/Sidebar.jsx:
+- Input "+ Crear" para crear nuevos boards (solo admin)
+- Botón ✕ para eliminar boards al hover (solo admin, no permite eliminar el único board)
+- Mantiene búsqueda, switch de boards, contador y ChatPanel
+
+src/App.jsx:
+- "+" y "🗑️" movidos del header a la barra de filtros (junto a "Fases")
+- Modo eliminación: al activar 🗑️, cada card muestra un ✕ rojo para borrar
+- CardContent extraído como componente independiente
+- DragOverlay: clon visual de la card sigue al cursor al arrastrar
+- DroppableZone dentro de SortableContext para soltar en espacio vacío
+- Column como wrapper visual (sin useDroppable)
+- activeId state para trackear drag activo
+
+== Funcionalidades actuales ==
+
+- Firebase Auth (email/password) + Firestore persistencia
+- Roles: admin (CRUD completo) / member (solo cambiar estado, limitado)
+- Kanban con 4 columnas: Pendiente, En progreso, Bloqueado, Hecho
+- Drag & drop con DragOverlay visual
+- Múltiples boards con creación/eliminación (solo admin)
+- Sidebar con lista de boards, búsqueda y chat en tiempo real
+- Filtros por módulo, prioridad, fase, búsqueda de texto
+- Modo archivadas / venidas
+- Export CSV
+- Progreso por columna + puntos de esfuerzo
+- Panel de admin (gestión de usuarios y roles)
+- Mobile responsive (scroll horizontal, menú hamburguesa)
+- Due dates con badges de color
+- Activity logs por tarea
+- Modal de detalle con edición inline y asignación
+
+== Deploy ==
+- GitHub Pages: https://nostradamesp.github.io/HHRR/
+- GitHub Actions deploy automático en cada push a main
+
+== Ronda 2026-05-18 - pulido operativo ==
+
+Commit previo relevante:
+- 633a855 - Improve IT operations workflow and task creation
+
+Cambios incluidos antes de esta ronda:
+- Vista tipo manager IT con métricas: vencidas, bloqueadas, sin asignar, alta urgencia y cierre pendiente.
+- Modal de card con decisión manager, motivo de bloqueo, asignarme, checklist editable y validación al marcar como hecho.
+- Task list convertida en vista operativa con responsable, sistema, SLA, vencimiento, estado y prioridad.
+- Formulario de crear/editar tarea con estado de guardado y error visible si Firebase/Pages rechaza la acción.
+- Export, boards, sidebar derecho, archive, configuración IT local y filtros principales conectados.
+
+Cambios de esta ronda:
+- "My comments" ahora filtra tareas que tienen comentarios en vez de ser un acceso visual sin efecto.
+- "Notifications" ahora abre la vista operativa y prioriza vencidas, luego bloqueadas, luego alta urgencia, luego cierre pendiente.
+- Export CSV ahora incluye campos IT: sistema, tipo, impacto, urgencia, SLA, vencimiento, decisión manager, solicitante y checklist.
+- Botón Admin se oculta en modo local demo para evitar abrir un panel vacío/no aplicable.
+- Se mantiene el layout sin las dos barras extra que se habían pedido quitar.
+
+Pendiente para siguientes rondas:
+- Añadir contador visible de comentarios por card.
+- Pulir permisos/reglas de Firebase si Pages sigue rechazando creación de cards.
+- Revisar con captura visual desktop/mobile después del deploy.

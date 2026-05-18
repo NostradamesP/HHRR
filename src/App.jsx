@@ -221,6 +221,10 @@ function operationalRank(task) {
   return 5;
 }
 
+function csvCell(value) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
 function filterTasks(tasks, q, mod, prio, ph) {
   const cq = q.trim().toLowerCase();
   return tasks.filter(t => {
@@ -1505,9 +1509,11 @@ export default function NoraHRKanban() {
   const [deleteMode, setDeleteMode] = useState(false);
   const [viewMode, setViewMode] = useState("board");
   const [myWorkOnly, setMyWorkOnly] = useState(false);
+  const [commentsOnly, setCommentsOnly] = useState(false);
   const [showItConfig, setShowItConfig] = useState(false);
   const [itConfig, setItConfig] = useState(() => readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig));
   const [activeId, setActiveId] = useState(null);
+  const [commentTaskIds, setCommentTaskIds] = useState([]);
   const appUserLevel = isLocalDemo ? "manager" : (itConfig.jobTitleHierarchy || {})[appUserData?.jobTitle || ""] || "viewer";
   const appCanCreate = appIsAdmin || appUserLevel === "manager" || appUserLevel === "admin";
   const appCanEdit = appCanCreate || appUserLevel === "editor";
@@ -1626,6 +1632,32 @@ export default function NoraHRKanban() {
   }, [user, isLocalDemo]);
 
   useEffect(() => {
+    if (isLocalDemo) {
+      const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
+      setCommentTaskIds(Object.entries(all).filter(([, comments]) => Array.isArray(comments) && comments.length > 0).map(([taskId]) => taskId));
+      return;
+    }
+    if (!user || !activeBoardId || tasks.length === 0) {
+      setCommentTaskIds([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const ids = [];
+        await Promise.all(tasks.map(async (task) => {
+          const snap = await getDocs(query(collection(db, "boards", activeBoardId, "tasks", task.id, "comments"), limit(1)));
+          if (!snap.empty) ids.push(task.id);
+        }));
+        if (!cancelled) setCommentTaskIds(ids);
+      } catch (e) {
+        console.error("Error loading task comment filters:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [tasks, user, activeBoardId, isLocalDemo]);
+
+  useEffect(() => {
     if (isLocalDemo || !user || !appIsAdmin || !activeBoardId || migrated.current) return;
     (async () => {
       try {
@@ -1660,6 +1692,10 @@ export default function NoraHRKanban() {
     if (myWorkOnly) {
       ts = ts.filter(t => t.assignedTo === appUser?.uid || t.assignedName === appUserData?.name);
     }
+    if (commentsOnly) {
+      const ids = new Set(commentTaskIds);
+      ts = ts.filter(t => ids.has(t.id));
+    }
     if (systemFilter !== "Todos") ts = ts.filter(t => t.system === systemFilter);
     if (typeFilter !== "Todos") ts = ts.filter(t => t.ticketType === typeFilter);
     if (responsibleFilter !== "Todos") ts = ts.filter(t => t.assignedName === responsibleFilter);
@@ -1682,7 +1718,7 @@ export default function NoraHRKanban() {
       return (a.order || 0) - (b.order || 0);
     });
     return filterTasks(ts, searchQuery, mod, prio, phase);
-  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter, opsFilter]);
+  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, commentsOnly, commentTaskIds, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter, opsFilter]);
 
   const operationalMetrics = useMemo(() => {
     const active = tasks.filter(t => !t.archived);
@@ -1959,8 +1995,29 @@ export default function NoraHRKanban() {
   }
 
   function exportCSV() {
-    const headers = "Título,Módulo,Fase,Prioridad,Esfuerzo,Estado,Asignado\n";
-    const rows = tasks.filter(t => !t.archived).map(t => `"${t.title}","${t.module}","${t.phase} - ${phaseMap[t.phase]}","${t.priority}","${t.effort}","${t.status}","${t.assignedName || ""}"`).join("\n");
+    const headers = ["Título", "Sistema", "Tipo", "Impacto", "Urgencia", "SLA horas", "Vencimiento", "Módulo", "Fase", "Prioridad", "Esfuerzo", "Estado", "Decisión manager", "Asignado", "Solicitante", "Checklist"].map(csvCell).join(",") + "\n";
+    const rows = tasks.filter(t => !t.archived).map(t => {
+      const checklist = checklistProgress(t);
+      const operational = operationalStates[getOperationalState(t)]?.label || "Normal";
+      return [
+        t.title,
+        t.system || "",
+        t.ticketType || "",
+        t.impact || "",
+        t.urgency || "",
+        t.slaHours || "",
+        t.dueDate || "",
+        t.module,
+        `${t.phase} - ${phaseMap[t.phase] || ""}`,
+        t.priority,
+        t.effort,
+        t.status,
+        operational,
+        t.assignedName || "",
+        t.requester || "",
+        checklist.total ? `${checklist.done}/${checklist.total}` : "",
+      ].map(csvCell).join(",");
+    }).join("\n");
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "norahr-tasks.csv"; a.click();
   }
@@ -1985,6 +2042,7 @@ export default function NoraHRKanban() {
   function handleSidebarAction(action) {
     if (action === "all") {
       setMyWorkOnly(false);
+      setCommentsOnly(false);
       setShowArchived(false);
       setOverdueOnly(false);
       setSearchQuery("");
@@ -2000,19 +2058,33 @@ export default function NoraHRKanban() {
     }
     if (action === "my-work") {
       setMyWorkOnly(true);
+      setCommentsOnly(false);
       setShowArchived(false);
       setOverdueOnly(false);
+      setOpsFilter("all");
       setViewMode("list");
     }
     if (action === "comments") {
+      setCommentsOnly(true);
       setViewMode("list");
       setMyWorkOnly(false);
       setSearchQuery("");
+      setShowArchived(false);
+      setOverdueOnly(false);
+      setOpsFilter("all");
     }
     if (action === "notifications") {
       setShowArchived(false);
       setMyWorkOnly(false);
-      setOverdueOnly(overdueCount > 0);
+      setCommentsOnly(false);
+      setOverdueOnly(false);
+      const nextFilter =
+        operationalMetrics.overdue > 0 ? "overdue" :
+        operationalMetrics.blocked > 0 ? "blocked" :
+        operationalMetrics.urgent > 0 ? "urgent" :
+        operationalMetrics.ready > 0 ? "ready" :
+        "all";
+      setOpsFilter(nextFilter);
       setViewMode("list");
     }
   }
@@ -2034,6 +2106,7 @@ export default function NoraHRKanban() {
     responsibleFilter !== "Todos" ||
     opsFilter !== "all" ||
     myWorkOnly ||
+    commentsOnly ||
     overdueOnly;
 
   function clearViewFilters() {
@@ -2048,6 +2121,7 @@ export default function NoraHRKanban() {
     setSlaFilter("Todos");
     setResponsibleFilter("Todos");
     setOpsFilter("all");
+    setCommentsOnly(false);
   }
 
   if (loading) {
@@ -2110,7 +2184,7 @@ export default function NoraHRKanban() {
                 <LayoutDashboard className="h-4 w-4" /> <span className="hidden sm:inline">Boards</span>
               </button>
               <div className="hidden items-center gap-2 md:flex">
-                {appIsAdmin && (
+                {appIsAdmin && !isLocalDemo && (
                   <button onClick={() => setShowAdmin(true)} className="flex h-8 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
                     <Settings className="h-4 w-4" /> Admin
                   </button>
@@ -2129,7 +2203,7 @@ export default function NoraHRKanban() {
                       {appUserData?.name || appUser.email}
                       <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${appIsAdmin ? "bg-cyan-100 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>{appIsAdmin ? "Admin" : "Member"}</span>
                     </div>
-                    {appIsAdmin && (
+                    {appIsAdmin && !isLocalDemo && (
                       <button onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Admin</button>
                     )}
                     {isLocalDemo && (
