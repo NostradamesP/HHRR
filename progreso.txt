@@ -81,3 +81,19 @@ Pendiente para siguientes rondas:
 - Añadir contador visible de comentarios por card.
 - Pulir permisos/reglas de Firebase si Pages sigue rechazando creación de cards.
 - Revisar con captura visual desktop/mobile después del deploy.
+
+== Ronda 2026-05-18 - boards visibles ==
+
+Problema detectado:
+- En local, crear boards no persistía ni aparecía porque el modo demo usaba un board fijo.
+- En producción, boards antiguos podían no cargar si fueron creados antes de tener el campo members.
+
+Cambios aplicados:
+- BoardContext ahora soporta boards locales persistentes en localStorage bajo norahr.local.boards.
+- Crear, cambiar y eliminar boards funciona también en localhost/127.0.0.1.
+- Sidebar permite crear boards en local y muestra el owner correctamente para el usuario demo.
+- En producción se repara la membresía de boards creados/owned por el usuario, agregándolo a members si falta.
+- La carga de boards en producción ya no depende de orderBy(createdAt), evitando fallos por índice faltante en Firestore.
+
+Nota:
+- Las tareas locales siguen compartiendo el dataset demo actual; esta ronda corrige visibilidad/gestión de boards, no separación de tareas por board local.

@@ -33,7 +33,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
   const { isAdmin, user, userData } = useAuth();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appIsAdmin = isAdmin || isLocalDemo;
-  const appUser = user || (isLocalDemo ? { email: "demo@norahr.local" } : null);
+  const appUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
   const appUserData = userData || (isLocalDemo ? { name: "Demo NoraHR" } : null);
   const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "NoraHR Roadmap" }] : boards);
   const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : activeBoardId);
@@ -90,7 +90,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
             </button>
           </div>
 
-          {appIsAdmin && !isLocalDemo && (
+          {appIsAdmin && (
             <button onClick={() => setNewName(newName || "Nuevo board")} className="mb-3 flex w-full items-center gap-3 rounded-xl bg-cyan-50 px-3 py-3 text-sm font-black text-cyan-700">
               <Plus className="h-5 w-5" />
               Create board
@@ -126,7 +126,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
                 className="h-10 w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-3 text-sm outline-none focus:border-cyan-300 focus:bg-white transition-colors"
               />
             </div>
-            {appIsAdmin && !isLocalDemo && (
+            {appIsAdmin && (
               <div className="mb-3">
                 <div className="flex gap-2">
                   <input
@@ -162,7 +162,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
               filtered.map((b, i) => (
                 <div key={b.id} className="group relative">
                   <button
-                    onClick={() => { if (!isLocalDemo) switchBoard(b.id); onClose(); }}
+                    onClick={() => { switchBoard(b.id); onClose(); }}
                     className={`w-full text-left rounded-lg px-3 py-2.5 text-sm transition-all ${
                       b.id === appActiveBoardId
                         ? "bg-slate-100 text-slate-950 font-black"
@@ -190,7 +190,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
                       <Users className="h-3.5 w-3.5" />
                     </button>
                   )}
-                  {appIsAdmin && !isLocalDemo && appBoards.length > 1 && (
+                  {appIsAdmin && appBoards.length > 1 && (
                     <button
                       onClick={(e) => handleDelete(b.id, e)}
                       className="absolute right-1 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-slate-400 opacity-0 transition-opacity hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
