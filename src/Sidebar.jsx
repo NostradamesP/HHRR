@@ -79,7 +79,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
         <div className="shrink-0 border-b border-slate-200 p-4">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-600 text-base font-black text-white shadow-sm">N</span>
+              <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-600 text-base font-black text-white shadow-sm">N</span>
               <div>
                 <h2 className="text-sm font-black text-slate-950">NoraHR Workspace</h2>
                 <p className="text-xs font-medium text-slate-400">{appBoards.length} boards activos</p>
