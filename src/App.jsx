@@ -1,4 +1,4 @@
-import React, { Component, useMemo, useState, useEffect, useRef } from "react";
+import React, { Component, useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, DragOverlay } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -142,14 +142,19 @@ const defaultItConfig = {
 function readLocalJSON(key, fallback) {
   try {
     const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : fallback;
+    if (raw === null) return fallback;
+    return JSON.parse(raw);
   } catch {
     return fallback;
   }
 }
 
 function writeLocalJSON(key, value) {
-  localStorage.setItem(key, JSON.stringify(value));
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn("localStorage write failed:", key, e);
+  }
 }
 
 function makeChecklist(title) {
@@ -359,7 +364,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   );
 }
 
-function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users }) {
+function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users, deletingId }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
 
@@ -398,7 +403,8 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
       {deleteMode && isAdmin && (
         <button
           onClick={(e) => { e.stopPropagation(); if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); } }}
-          className="absolute -right-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 transition-colors"
+          disabled={deletingId === task.id}
+          className="absolute -right-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 disabled:opacity-40 transition-colors"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -408,7 +414,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
   );
 }
 
-function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal, users }) {
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal, users, deletingId }) {
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
   const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
@@ -455,7 +461,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
         <div className="p-1.5">
           <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
             <div className="space-y-1.5">
-              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} />)}
+              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} deletingId={deletingId} />)}
               {isAdmin && <DroppableZone status={status} />}
             </div>
           </SortableContext>
@@ -611,7 +617,7 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
   );
 }
 
-function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false }) {
+function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false, deletingId }) {
   const [logs, setLogs] = useState([]);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
@@ -688,7 +694,8 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
     if (activeBoardId && task.id) {
       const q = query(
         collection(db, "boards", activeBoardId, "tasks", task.id, "comments"),
-        orderBy("createdAt", "asc")
+        orderBy("createdAt", "asc"),
+        limit(100)
       );
       const unsub = onSnapshot(q, (snap) => {
         setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -910,12 +917,12 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
         </button>
         <div className="flex items-center gap-2 text-slate-400">
           {isAdmin && (
-            <button onClick={() => onArchive(task.id, !task.archived)} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-slate-700" title={task.archived ? "Restaurar" : "Archivar"}>
+            <button onClick={() => onArchive(task.id, !task.archived)} disabled={deletingId === task.id} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-slate-700 disabled:opacity-40" title={task.archived ? "Restaurar" : "Archivar"}>
               <Archive className="h-5 w-5" />
             </button>
           )}
           {isAdmin && (
-            <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-red-600" title="Eliminar">
+            <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} disabled={deletingId === task.id} className="flex h-9 w-9 items-center justify-center rounded-lg hover:bg-white hover:text-red-600 disabled:opacity-40" title="Eliminar">
               <Trash2 className="h-5 w-5" />
             </button>
           )}
@@ -1261,10 +1268,10 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
 
                 {isAdmin && (
                   <>
-                    <button onClick={() => onArchive(task.id, !task.archived)} className="flex w-full items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-left text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100">
+                    <button onClick={() => onArchive(task.id, !task.archived)} disabled={deletingId === task.id} className="flex w-full items-center gap-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-left text-sm font-semibold text-amber-700 transition-colors hover:bg-amber-100 disabled:opacity-40">
                       <Archive className="h-4 w-4" /> {task.archived ? "Restaurar tarea" : "Archivar tarea"}
                     </button>
-                    <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} className="flex w-full items-center gap-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-100">
+                    <button onClick={() => { if (confirm("¿Eliminar esta tarea?")) { onDelete(task.id); onClose(); } }} disabled={deletingId === task.id} className="flex w-full items-center gap-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-left text-sm font-semibold text-red-600 transition-colors hover:bg-red-100 disabled:opacity-40">
                       <Trash2 className="h-4 w-4" /> Eliminar tarea
                     </button>
                   </>
@@ -1337,6 +1344,8 @@ function LoginForm() {
   const [name, setName] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [showReset, setShowReset] = useState(false);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -1357,11 +1366,49 @@ function LoginForm() {
         setError("La contraseña debe tener al menos 6 caracteres");
       } else if (err.code === "auth/invalid-email") {
         setError("Correo electrónico inválido");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Demasiados intentos. Intenta de nuevo más tarde.");
+      } else if (err.code === "auth/network-request-failed") {
+        setError("Error de conexión. Verifica tu internet.");
+      } else if (err.code === "auth/user-disabled") {
+        setError("Esta cuenta ha sido deshabilitada.");
       } else {
-        setError(err.message);
+        setError("Error al iniciar sesión. Verifica tus credenciales.");
       }
     }
     setSubmitting(false);
+  }
+
+  async function handleReset() {
+    if (!email.trim()) { setError("Ingresa tu correo primero"); return; }
+    setSubmitting(true);
+    setError("");
+    try {
+      const { sendPasswordResetEmail } = await import("firebase/auth");
+      const { auth } = await import("./firebase");
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetSent(true);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        setError("No hay cuenta con este correo");
+      } else {
+        setError("Error al enviar el correo. Intenta de nuevo.");
+      }
+    }
+    setSubmitting(false);
+  }
+
+  if (resetSent) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] p-4">
+        <div className="w-full max-w-sm rounded-2xl border bg-white p-8 text-center shadow-lg">
+          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-emerald-600 text-lg font-bold text-white">✓</span>
+          <h1 className="mt-3 text-lg font-bold text-slate-900">Correo enviado</h1>
+          <p className="mt-2 text-sm text-slate-500">Revisa tu bandeja de entrada para restablecer tu contraseña.</p>
+          <button onClick={() => { setResetSent(false); setShowReset(false); setError(""); }} className="mt-6 text-sm text-blue-600 hover:underline font-medium">Volver al inicio de sesión</button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -1370,30 +1417,58 @@ function LoginForm() {
         <div className="mb-6 text-center">
           <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-slate-900 text-lg font-bold text-white">N</span>
           <h1 className="mt-3 text-lg font-bold text-slate-900">NoraHR Roadmap</h1>
-          <p className="text-sm text-slate-400">{mode === "login" ? "Inicia sesión para continuar" : "Crea tu cuenta"}</p>
+          <p className="text-sm text-slate-400">{showReset ? "Restablecer contraseña" : mode === "login" ? "Inicia sesión para continuar" : "Crea tu cuenta"}</p>
         </div>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {mode === "signup" && (
-            <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" required
+        {showReset ? (
+          <div className="space-y-4">
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Tu correo electrónico" type="email" required autoComplete="email"
               className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
-          )}
-          <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" type="email" required autoComplete="email"
-            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
-          <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" type="password" required autoComplete={mode === "login" ? "current-password" : "new-password"}
-            className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
-          {error && <p className="text-xs text-red-500">{error}</p>}
-          <button type="submit" disabled={submitting}
-            className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
-            {submitting ? "..." : mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
-          </button>
-        </form>
-        <p className="mt-4 text-center text-xs text-slate-500">
-          {mode === "login" ? "¿No tienes cuenta? " : "¿Ya tienes cuenta? "}
-          <button type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
-            className="text-blue-600 hover:underline font-medium">
-            {mode === "login" ? "Crear cuenta" : "Iniciar sesión"}
-          </button>
-        </p>
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <button onClick={handleReset} disabled={submitting}
+              className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
+              {submitting ? "Enviando..." : "Enviar correo de recuperación"}
+            </button>
+            <button type="button" onClick={() => { setShowReset(false); setError(""); }}
+              className="w-full text-center text-xs text-slate-500 hover:text-slate-700">Volver</button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {mode === "signup" && (
+              <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" required
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+            )}
+            <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" type="email" required autoComplete="email"
+              className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+            {mode === "login" && (
+              <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" type="password" required autoComplete="current-password"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+            )}
+            {mode === "signup" && (
+              <input value={password} onChange={e => setPassword(e.target.value)} placeholder="Contraseña" type="password" required autoComplete="new-password"
+                className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
+            <button type="submit" disabled={submitting}
+              className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-colors">
+              {submitting ? "..." : mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
+            </button>
+            {mode === "login" && (
+              <button type="button" onClick={() => setShowReset(true)}
+                className="w-full text-center text-xs text-slate-400 hover:text-blue-600 transition-colors">
+                ¿Olvidaste tu contraseña?
+              </button>
+            )}
+          </form>
+        )}
+        {!showReset && (
+          <p className="mt-4 text-center text-xs text-slate-500">
+            {mode === "login" ? "¿No tienes cuenta? " : "¿Ya tienes cuenta? "}
+            <button type="button" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}
+              className="text-blue-600 hover:underline font-medium">
+              {mode === "login" ? "Crear cuenta" : "Iniciar sesión"}
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1514,6 +1589,9 @@ export default function NoraHRKanban() {
   const [itConfig, setItConfig] = useState(() => readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig));
   const [activeId, setActiveId] = useState(null);
   const [commentTaskIds, setCommentTaskIds] = useState([]);
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((msg) => setToast(msg), []);
+  const [deletingId, setDeletingId] = useState(null);
   const appUserLevel = isLocalDemo ? "manager" : (itConfig.jobTitleHierarchy || {})[appUserData?.jobTitle || ""] || "viewer";
   const appCanCreate = appIsAdmin || appUserLevel === "manager" || appUserLevel === "admin";
   const appCanEdit = appCanCreate || appUserLevel === "editor";
@@ -1521,6 +1599,8 @@ export default function NoraHRKanban() {
   const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(appBoards);
+  const tasksRef = useRef(tasks);
+  tasksRef.current = tasks;
   const localLoaded = useRef(false);
   boardsRef.current = appBoards;
 
@@ -1544,6 +1624,12 @@ export default function NoraHRKanban() {
     const unsub = onSnapshot(q, (snap) => {
       const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setTasks(ts);
+      tasksRef.current = ts;
+      setDetailT(prev => {
+        if (!prev) return prev;
+        const updated = ts.find(t => t.id === prev.id);
+        return updated || prev;
+      });
       const missingOrder = ts.filter(t => t.order === undefined || t.order === null);
       if (missingOrder.length > 0) {
         Promise.allSettled(
@@ -1605,9 +1691,11 @@ export default function NoraHRKanban() {
           })();
         }
       }
+    }, (err) => {
+      console.error("Tasks listener error:", err);
     });
     return unsub;
-  }, [user, appIsAdmin, activeBoardId, isLocalDemo]);
+  }, [user, userData, appIsAdmin, activeBoardId, isLocalDemo]);
 
   useEffect(() => {
     if (!isLocalDemo || !localLoaded.current) return;
@@ -1625,9 +1713,15 @@ export default function NoraHRKanban() {
       return;
     }
     if (!user) return;
-    const unsub = onSnapshot(collection(db, "users"), (snap) => {
-      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    const unsub = onSnapshot(
+      query(collection(db, "users"), limit(200)),
+      (snap) => {
+        setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      },
+      (err) => {
+        console.error("Users listener error:", err);
+      }
+    );
     return unsub;
   }, [user, isLocalDemo]);
 
@@ -1790,11 +1884,14 @@ export default function NoraHRKanban() {
   }
 
   async function archiveTask(id, archived) {
-    const task = tasks.find(t => t.id === id);
-    if (!task) return;
+    setDeletingId(id);
+    const currentTasks = tasksRef.current;
+    const task = currentTasks.find(t => t.id === id);
+    if (!task) return setDeletingId(null);
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, archived } : t));
       createLocalLog(id, task.title, archived ? "archived" : "restored", "");
+      setDeletingId(null);
       return;
     }
     try {
@@ -1802,15 +1899,18 @@ export default function NoraHRKanban() {
       createLog(id, task.title, archived ? "archived" : "restored", "");
     } catch (e) {
       console.error("Error archiving task:", e);
+      showToast("Error al archivar la tarea");
     }
+    setDeletingId(null);
   }
 
   async function handleDragEnd(e) {
     const { active, over } = e;
     if (!over || !appIsAdmin) return;
 
+    const currentTasks = tasksRef.current;
     const taskId = String(active.id);
-    const task = tasks.find(t => t.id === taskId);
+    const task = currentTasks.find(t => t.id === taskId);
     if (!task) return;
 
     const overStr = String(over.id);
@@ -1820,7 +1920,7 @@ export default function NoraHRKanban() {
     if (overStr.startsWith("column-")) {
       newStatus = overStr.replace("column-", "");
     } else {
-      const overTask = tasks.find(t => t.id === overStr);
+      const overTask = currentTasks.find(t => t.id === overStr);
       if (overTask) {
         if (overTask.status !== task.status) {
           newStatus = overTask.status;
@@ -1832,29 +1932,62 @@ export default function NoraHRKanban() {
 
     if (newStatus || isReorder) {
       const opPatch = newStatus === "Bloqueado" ? { operationalState: "blocked" } : newStatus ? { operationalState: "normal" } : {};
+      const targetStatus = newStatus || task.status;
+      const colTasks = currentTasks
+        .filter(t => t.status === targetStatus && t.id !== taskId && !t.archived)
+        .sort((a, b) => (a.order || 0) - (b.order || 0));
+
+      let newOrder;
+      if (newStatus) {
+        if (overStr.startsWith("column-")) {
+          newOrder = colTasks.length > 0 ? (colTasks[colTasks.length - 1].order || 0) + 1000 : Date.now();
+        } else {
+          const overIdx = colTasks.findIndex(t => t.id === overStr);
+          if (overIdx <= 0) {
+            newOrder = colTasks.length > 0 ? (colTasks[0].order || 0) - 1000 : Date.now();
+          } else {
+            const prev = colTasks[overIdx - 1];
+            const next = colTasks[overIdx];
+            newOrder = ((prev.order || 0) + (next.order || 0)) / 2;
+          }
+        }
+      } else {
+        const dropIdx = colTasks.findIndex(t => t.id === overStr);
+        if (dropIdx <= 0) {
+          newOrder = colTasks.length > 0 ? (colTasks[0].order || 0) - 1000 : Date.now();
+        } else if (dropIdx >= colTasks.length) {
+          newOrder = colTasks.length > 0 ? (colTasks[colTasks.length - 1].order || 0) + 1000 : Date.now();
+        } else {
+          newOrder = ((colTasks[dropIdx - 1].order || 0) + (colTasks[dropIdx].order || 0)) / 2;
+        }
+      }
+
       if (isLocalDemo) {
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), ...opPatch, order: Date.now() } : t));
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), ...opPatch, order: newOrder } : t));
         if (newStatus) createLocalLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
         setActiveId(null);
         return;
       }
       try {
-        const updates = { updatedAt: serverTimestamp(), order: Date.now() };
+        const updates = { updatedAt: serverTimestamp(), order: newOrder };
         if (newStatus) updates.status = newStatus;
         Object.assign(updates, opPatch);
         await updateDoc(doc(db, "boards", activeBoardId, "tasks", taskId), updates);
         if (newStatus) createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
         console.error("Error updating task status:", e);
+        showToast("Error al actualizar el estado de la tarea");
       }
     }
     setActiveId(null);
   }
 
   async function updateStatus(id, s) {
-    const task = tasks.find(t => t.id === id);
+    const currentTasks = tasksRef.current;
+    const task = currentTasks.find(t => t.id === id);
     if (!task) return;
     const opPatch = s === "Bloqueado" ? { operationalState: "blocked" } : { operationalState: "normal" };
+    const previousDetail = detailT;
     setDetailT(prev => prev && prev.id === id ? { ...prev, status: s, ...opPatch, order: Date.now() } : prev);
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, status: s, ...opPatch, order: Date.now() } : t));
@@ -1866,14 +1999,19 @@ export default function NoraHRKanban() {
       createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
     } catch (e) {
       console.error("Error updating status:", e);
+      setDetailT(previousDetail);
     }
   }
 
   async function deleteTask(id) {
-    const task = tasks.find(t => t.id === id);
+    setDeletingId(id);
+    const currentTasks = tasksRef.current;
+    const task = currentTasks.find(t => t.id === id);
+    if (!task && !isLocalDemo) return;
     if (isLocalDemo) {
       setTasks(prev => prev.filter(t => t.id !== id));
       if (task) createLocalLog(id, task.title, "deleted", "");
+      setDeletingId(null);
       return;
     }
     try {
@@ -1881,7 +2019,9 @@ export default function NoraHRKanban() {
       if (task) createLog(id, task.title, "deleted", "");
     } catch (e) {
       console.error("Error deleting task:", e);
+      showToast("Error al eliminar la tarea");
     }
+    setDeletingId(null);
   }
 
   async function addTask(f) {
@@ -1953,6 +2093,7 @@ export default function NoraHRKanban() {
       setNewTaskStatus("Pendiente");
     } catch (e) {
       console.error("Error adding task:", e);
+      showToast("Error al crear la tarea");
       throw new Error(e?.message || "Firebase rechazó la creación de la tarea.");
     }
   }
@@ -1961,7 +2102,9 @@ export default function NoraHRKanban() {
     if (isLocalDemo) {
       const { id, ...data } = f;
       setTasks(prev => prev.map(t => t.id === id ? { ...t, ...data } : t));
-      createLocalLog(id, f.title, "updated", "");
+      const currentTasks = tasksRef.current;
+      const task = currentTasks.find(t => t.id === id);
+      createLocalLog(id, (task || f).title, "updated", "");
       setEditT(null);
       return;
     }
@@ -1975,22 +2118,31 @@ export default function NoraHRKanban() {
       setEditT(null);
     } catch (e) {
       console.error("Error editing task:", e);
+      showToast("Error al editar la tarea");
       throw new Error(e?.message || "Firebase rechazó la edición de la tarea.");
     }
   }
 
   async function patchTask(id, patch) {
+    const previousDetail = detailT;
     setDetailT(prev => prev && prev.id === id ? { ...prev, ...patch } : prev);
     if (isLocalDemo) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t));
-      const task = tasks.find(t => t.id === id);
-      if (task) createLocalLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
+      const currentTasks = tasksRef.current;
+      const task = currentTasks.find(t => t.id === id);
+      const logTitle = patch.title || task?.title || "Tarea";
+      createLocalLog(id, logTitle, "updated", `Campo: ${Object.keys(patch).join(", ")}`);
       return;
     }
+    const currentTasks = tasksRef.current;
+    const task = currentTasks.find(t => t.id === id);
     try {
       await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), { ...patch, updatedAt: serverTimestamp() });
+      if (task) createLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
     } catch (e) {
       console.error("Error patching task:", e);
+      setDetailT(previousDetail);
+      showToast("Error al guardar los cambios");
     }
   }
 
@@ -2019,7 +2171,9 @@ export default function NoraHRKanban() {
       ].map(csvCell).join(",");
     }).join("\n");
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "norahr-tasks.csv"; a.click();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "norahr-tasks.csv"; a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
   function toggleCollapse(s) { setCollapsed(c => ({ ...c, [s]: !c[s] })); }
@@ -2339,7 +2493,7 @@ export default function NoraHRKanban() {
           ) : (
             <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
               {columns.map(({ status, items }) => (
-                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} />
+                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
               ))}
             </div>
           )}
@@ -2356,7 +2510,7 @@ export default function NoraHRKanban() {
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} />}
+          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} deletingId={deletingId} />}
         </ErrorBoundary>
       </Modal>
 
@@ -2384,6 +2538,26 @@ export default function NoraHRKanban() {
       {sidebarOpen ? "▶" : "◀"}
     </button>
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onQuickAction={handleSidebarAction} users={users} />
+    <ToastNotification message={toast} onClose={() => setToast(null)} />
     </>
+  );
+}
+
+function ToastNotification({ message, onClose }) {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onClose, 4000);
+    return () => clearTimeout(t);
+  }, [message, onClose]);
+  if (!message) return null;
+  return (
+    <div className="fixed bottom-6 right-6 z-[100] max-w-sm animate-in slide-in-from-right-4 fade-in duration-300 rounded-xl border border-red-200 bg-white px-4 py-3 shadow-xl">
+      <div className="flex items-start gap-3">
+        <span className="text-sm text-red-600 font-semibold leading-snug">{message}</span>
+        <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600">
+          <X className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, addDoc, query, orderBy, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, query, orderBy, limit, serverTimestamp } from "firebase/firestore";
 import { MessageSquare, Send } from "lucide-react";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
@@ -16,10 +16,13 @@ export default function ChatPanel() {
     if (!activeBoardId) return;
     const q = query(
       collection(db, "boards", activeBoardId, "messages"),
-      orderBy("createdAt", "asc")
+      orderBy("createdAt", "asc"),
+      limit(100)
     );
     const unsub = onSnapshot(q, (snap) => {
       setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => {
+      console.error("Chat messages listener error:", err);
     });
     return unsub;
   }, [activeBoardId]);
@@ -30,14 +33,18 @@ export default function ChatPanel() {
 
   async function sendMessage(e) {
     e.preventDefault();
-    if (!text.trim() || !activeBoardId) return;
-    await addDoc(collection(db, "boards", activeBoardId, "messages"), {
-      userId: user.uid,
-      userName: userData?.name || user.email,
-      text: text.trim(),
-      createdAt: serverTimestamp(),
-    });
-    setText("");
+    if (!text.trim() || !activeBoardId || !user) return;
+    try {
+      await addDoc(collection(db, "boards", activeBoardId, "messages"), {
+        userId: user.uid,
+        userName: userData?.name || user.email,
+        text: text.trim(),
+        createdAt: serverTimestamp(),
+      });
+      setText("");
+    } catch (err) {
+      console.error("Error sending message:", err);
+    }
   }
 
   function formatTime(ts) {

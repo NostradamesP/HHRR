@@ -22,31 +22,53 @@ export function AuthProvider({ children }) {
       setLoading(false);
       return;
     }
+
+    let mounted = true;
+    let pendingUserUid = null;
+
     const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (!mounted) return;
+      const currentUid = firebaseUser?.uid || null;
+      pendingUserUid = currentUid;
       setUser(firebaseUser);
+
       if (firebaseUser) {
-        let snap = await getDoc(doc(db, "users", firebaseUser.uid));
-        if (snap.exists()) {
-          setUserData(snap.data());
-        } else {
-          const usersSnap = await getDocs(collection(db, "users"));
-          const role = usersSnap.empty ? "admin" : "member";
-          const data = {
-            email: firebaseUser.email,
-            name: firebaseUser.email.split("@")[0],
-            role,
-            jobTitle: usersSnap.empty ? "IT Project Manager" : "Soporte Técnico",
-            createdAt: new Date().toISOString(),
-          };
-          await setDoc(doc(db, "users", firebaseUser.uid), data);
-          setUserData(data);
+        try {
+          let snap = await getDoc(doc(db, "users", currentUid));
+          if (!mounted) return;
+
+          if (pendingUserUid !== currentUid) return;
+
+          if (snap.exists()) {
+            setUserData(snap.data());
+          } else {
+            const usersSnap = await getDocs(collection(db, "users"));
+            if (!mounted) return;
+            const role = usersSnap.empty ? "admin" : "member";
+            const data = {
+              email: firebaseUser.email,
+              name: firebaseUser.email.split("@")[0],
+              role,
+              jobTitle: usersSnap.empty ? "IT Project Manager" : "Soporte Técnico",
+              createdAt: new Date().toISOString(),
+            };
+            await setDoc(doc(db, "users", currentUid), data);
+            if (mounted) setUserData(data);
+          }
+        } catch (e) {
+          if (mounted) console.error("Error loading user data:", e);
         }
       } else {
-        setUserData(null);
+        pendingUserUid = null;
+        if (mounted) setUserData(null);
       }
-      setLoading(false);
+      if (mounted) setLoading(false);
     });
-    return unsub;
+
+    return () => {
+      mounted = false;
+      unsub();
+    };
   }, []);
 
   async function login(email, password) {

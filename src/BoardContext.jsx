@@ -7,9 +7,25 @@ const BoardContext = createContext(null);
 const LOCAL_BOARDS_KEY = "norahr.local.boards";
 const DEFAULT_LOCAL_BOARD = { id: "local-demo-board", name: "NoraHR Roadmap", ownerId: "local-demo-user", members: ["local-demo-user"] };
 
+function safeGetItem(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSetItem(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (e) {
+    console.warn("localStorage write failed:", e);
+  }
+}
+
 function readLocalBoards() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(LOCAL_BOARDS_KEY) || "[]");
+    const parsed = JSON.parse(safeGetItem(LOCAL_BOARDS_KEY) || "[]");
     return Array.isArray(parsed) && parsed.length ? parsed : [DEFAULT_LOCAL_BOARD];
   } catch {
     return [DEFAULT_LOCAL_BOARD];
@@ -17,23 +33,49 @@ function readLocalBoards() {
 }
 
 function writeLocalBoards(boards) {
-  localStorage.setItem(LOCAL_BOARDS_KEY, JSON.stringify(boards));
+  safeSetItem(LOCAL_BOARDS_KEY, JSON.stringify(boards));
+}
+
+async function deleteSubcollection(boardId, subcol) {
+  try {
+    const snap = await getDocs(collection(db, "boards", boardId, subcol));
+    if (snap.empty) return;
+    await Promise.allSettled(snap.docs.map(d => deleteDoc(doc(db, "boards", boardId, subcol, d.id))));
+  } catch (e) {
+    console.warn(`Error cleaning ${subcol} for board ${boardId}:`, e);
+  }
+}
+
+async function migrateSubcollection(fromId, toId, subcol) {
+  try {
+    const snap = await getDocs(collection(db, "boards", fromId, subcol));
+    if (snap.empty) return;
+    await Promise.allSettled([
+      ...snap.docs.map(d => setDoc(doc(db, "boards", toId, subcol, d.id), d.data())),
+      ...snap.docs.map(d => deleteDoc(doc(db, "boards", fromId, subcol, d.id))),
+    ]);
+  } catch (e) {
+    console.warn(`Error migrating ${subcol} from ${fromId} to ${toId}:`, e);
+  }
 }
 
 export function BoardProvider({ children }) {
   const { user } = useAuth();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const [boards, setBoards] = useState([]);
-  const [activeBoardId, setActiveBoardId] = useState(() => localStorage.getItem("activeBoardId"));
+  const [activeBoardId, setActiveBoardId] = useState(() => safeGetItem("activeBoardId"));
   const [loading, setLoading] = useState(true);
   const initialized = useRef(false);
+  const deduped = useRef(false);
+  const boardsRef = useRef(boards);
+  boardsRef.current = boards;
 
   useEffect(() => {
     if (isLocalDemo) {
       const localBoards = readLocalBoards();
-      const saved = localStorage.getItem("activeBoardId");
+      const saved = safeGetItem("activeBoardId");
       const active = saved && localBoards.find(b => b.id === saved) ? saved : localBoards[0].id;
-      localStorage.setItem("activeBoardId", active);
+      safeSetItem("activeBoardId", active);
       setBoards(localBoards);
       setActiveBoardId(active);
       setLoading(false);
@@ -83,7 +125,6 @@ export function BoardProvider({ children }) {
           });
         setBoards(list);
 
-        // migration: add members + ownerId to legacy boards
         list.forEach(b => {
           if (!b.members && b.createdBy) {
             updateDoc(doc(db, "boards", b.id), { members: [b.createdBy], ownerId: b.createdBy }).catch(console.error);
@@ -93,10 +134,61 @@ export function BoardProvider({ children }) {
         if (list.length > 0) {
           setActiveBoardId(prev => {
             if (prev && list.find(b => b.id === prev)) return prev;
-            const saved = localStorage.getItem("activeBoardId");
+            const saved = safeGetItem("activeBoardId");
             if (saved && list.find(b => b.id === saved)) return saved;
-            localStorage.setItem("activeBoardId", list[0].id);
+            safeSetItem("activeBoardId", list[0].id);
             return list[0].id;
+          });
+
+          const boardsByName = {};
+          list.forEach(b => {
+            if (!boardsByName[b.name]) boardsByName[b.name] = [];
+            boardsByName[b.name].push(b);
+          });
+
+          if (!deduped.current) {
+            deduped.current = true;
+            Object.values(boardsByName).forEach(async (dups) => {
+            if (dups.length <= 1) return;
+            const main = dups[0];
+            const extras = dups.slice(1);
+            for (const extra of extras) {
+              try {
+                await Promise.all([
+                  migrateSubcollection(extra.id, main.id, "tasks"),
+                  migrateSubcollection(extra.id, main.id, "logs"),
+                  migrateSubcollection(extra.id, main.id, "messages"),
+                ]);
+                const tasksSnap = await getDocs(collection(db, "boards", extra.id, "tasks"));
+                await Promise.allSettled(
+                  tasksSnap.docs.map(async (taskDoc) => {
+                    await migrateSubcollection(
+                      `boards/${extra.id}/tasks/${taskDoc.id}`,
+                      `boards/${main.id}/tasks/${taskDoc.id}`,
+                      "comments"
+                    );
+                  })
+                );
+                await deleteDoc(doc(db, "boards", extra.id));
+              } catch (e) {
+                console.error("Error deduplicating board:", extra.id, e);
+              }
+            }
+          });
+          }
+        } else if (!initialized.current) {
+          initialized.current = true;
+          addDoc(collection(db, "boards"), {
+            name: "NoraHR Roadmap",
+            createdBy: user.uid,
+            ownerId: user.uid,
+            members: [user.uid],
+            createdAt: serverTimestamp(),
+          }).then(ref => {
+            safeSetItem("activeBoardId", ref.id);
+            setActiveBoardId(ref.id);
+          }).catch(e => {
+            console.error("Error creating default board:", e);
           });
         }
 
@@ -113,62 +205,10 @@ export function BoardProvider({ children }) {
     };
   }, [user, isLocalDemo]);
 
-  useEffect(() => {
-    if (isLocalDemo || !user || !db || initialized.current) return;
-    initialized.current = true;
-
-    (async () => {
-      try {
-        const snap = await getDocs(
-          query(collection(db, "boards"), where("name", "==", "NoraHR Roadmap"))
-        );
-
-        if (snap.docs.length > 1) {
-          const main = snap.docs[0];
-          const extras = snap.docs.slice(1);
-          for (const extra of extras) {
-            const [tasksSnap, logsSnap] = await Promise.all([
-              getDocs(collection(db, "boards", extra.id, "tasks")),
-              getDocs(collection(db, "boards", extra.id, "logs")),
-            ]);
-            const writes = [
-              ...tasksSnap.docs.map(d =>
-                setDoc(doc(db, "boards", main.id, "tasks", d.id), d.data())
-              ),
-              ...tasksSnap.docs.map(d =>
-                deleteDoc(doc(db, "boards", extra.id, "tasks", d.id))
-              ),
-              ...logsSnap.docs.map(d =>
-                setDoc(doc(db, "boards", main.id, "logs", d.id), d.data())
-              ),
-              ...logsSnap.docs.map(d =>
-                deleteDoc(doc(db, "boards", extra.id, "logs", d.id))
-              ),
-            ];
-            await Promise.allSettled(writes);
-            await deleteDoc(doc(db, "boards", extra.id));
-          }
-          localStorage.setItem("activeBoardId", main.id);
-          setActiveBoardId(main.id);
-          return;
-        }
-
-        if (snap.empty) {
-          const ref = await addDoc(collection(db, "boards"), {
-            name: "NoraHR Roadmap",
-            createdBy: user.uid,
-            ownerId: user.uid,
-            members: [user.uid],
-            createdAt: serverTimestamp(),
-          });
-          localStorage.setItem("activeBoardId", ref.id);
-          setActiveBoardId(ref.id);
-        }
-      } catch (e) {
-        console.error("Board init error:", e);
-      }
-    })();
-  }, [user, isLocalDemo]);
+  function switchBoard(boardId) {
+    safeSetItem("activeBoardId", boardId);
+    setActiveBoardId(boardId);
+  }
 
   async function createBoard(name) {
     if (isLocalDemo) {
@@ -186,26 +226,33 @@ export function BoardProvider({ children }) {
       };
       const nextBoards = [...localBoards, nextBoard];
       writeLocalBoards(nextBoards);
-      localStorage.setItem("activeBoardId", nextBoard.id);
+      safeSetItem("activeBoardId", nextBoard.id);
       setBoards(nextBoards);
       setActiveBoardId(nextBoard.id);
       return nextBoard.id;
     }
     if (!user) return null;
-    const snap = await getDocs(query(collection(db, "boards"), where("name", "==", name)));
-    if (!snap.empty) {
-      throw new Error("Ya existe un board con ese nombre");
+    try {
+      const snap = await getDocs(
+        query(collection(db, "boards"), where("createdBy", "==", user.uid), where("name", "==", name))
+      );
+      if (!snap.empty) {
+        throw new Error("Ya existe un board con ese nombre");
+      }
+      const ref = await addDoc(collection(db, "boards"), {
+        name,
+        createdBy: user.uid,
+        ownerId: user.uid,
+        members: [user.uid],
+        createdAt: serverTimestamp(),
+      });
+      safeSetItem("activeBoardId", ref.id);
+      setActiveBoardId(ref.id);
+      return ref.id;
+    } catch (e) {
+      console.error("Error creating board:", e);
+      throw e;
     }
-    const ref = await addDoc(collection(db, "boards"), {
-      name,
-      createdBy: user.uid,
-      ownerId: user.uid,
-      members: [user.uid],
-      createdAt: serverTimestamp(),
-    });
-    localStorage.setItem("activeBoardId", ref.id);
-    setActiveBoardId(ref.id);
-    return ref.id;
   }
 
   async function deleteBoard(boardId) {
@@ -216,49 +263,59 @@ export function BoardProvider({ children }) {
       writeLocalBoards(nextBoards);
       setBoards(nextBoards);
       if (activeBoardId === boardId) {
-        switchBoard(nextBoards[0].id);
+        const remaining = nextBoards;
+        if (remaining.length > 0) {
+          switchBoard(remaining[0].id);
+        }
       }
       return;
     }
     if (!user) return;
-    if (boards.length <= 1) return;
+    const currentBoards = boardsRef.current;
+    if (currentBoards.length <= 1) return;
 
-    const [tasksSnap, logsSnap] = await Promise.all([
-      getDocs(collection(db, "boards", boardId, "tasks")),
-      getDocs(collection(db, "boards", boardId, "logs")),
-    ]);
-    const deletes = [
-      ...tasksSnap.docs.map(d => deleteDoc(doc(db, "boards", boardId, "tasks", d.id))),
-      ...logsSnap.docs.map(d => deleteDoc(doc(db, "boards", boardId, "logs", d.id))),
-    ];
-    await Promise.allSettled(deletes);
-    await deleteDoc(doc(db, "boards", boardId));
+    try {
+      await Promise.all([
+        deleteSubcollection(boardId, "tasks"),
+        deleteSubcollection(boardId, "logs"),
+        deleteSubcollection(boardId, "messages"),
+      ]);
+      await deleteDoc(doc(db, "boards", boardId));
 
-    if (activeBoardId === boardId) {
-      const remaining = boards.filter(b => b.id !== boardId);
-      if (remaining.length > 0) {
-        switchBoard(remaining[0].id);
+      if (activeBoardId === boardId) {
+        const remaining = currentBoards.filter(b => b.id !== boardId);
+        if (remaining.length > 0) {
+          switchBoard(remaining[0].id);
+        }
       }
+    } catch (e) {
+      console.error("Error deleting board:", e);
+      throw new Error("No se pudo eliminar el board completamente");
     }
-  }
-
-  function switchBoard(boardId) {
-    localStorage.setItem("activeBoardId", boardId);
-    setActiveBoardId(boardId);
   }
 
   async function addMember(boardId, uid) {
     if (!user) return;
-    await updateDoc(doc(db, "boards", boardId), {
-      members: arrayUnion(uid),
-    });
+    try {
+      await updateDoc(doc(db, "boards", boardId), {
+        members: arrayUnion(uid),
+      });
+    } catch (e) {
+      console.error("Error adding member:", e);
+      throw new Error("No se pudo agregar el miembro");
+    }
   }
 
   async function removeMember(boardId, uid) {
     if (!user) return;
-    await updateDoc(doc(db, "boards", boardId), {
-      members: arrayRemove(uid),
-    });
+    try {
+      await updateDoc(doc(db, "boards", boardId), {
+        members: arrayRemove(uid),
+      });
+    } catch (e) {
+      console.error("Error removing member:", e);
+      throw new Error("No se pudo eliminar el miembro");
+    }
   }
 
   return (
