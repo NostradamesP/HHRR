@@ -97,3 +97,41 @@ Cambios aplicados:
 
 Nota:
 - Las tareas locales siguen compartiendo el dataset demo actual; esta ronda corrige visibilidad/gestión de boards, no separación de tareas por board local.
+
+== Estado guardado - 2026-05-18 ==
+
+Carpeta local del repo:
+- /Users/Erojas/Desktop/norahr-roadmap-fixed
+
+Rama actual:
+- main
+
+Ultimos commits guardados:
+- 0b701dc - Fix board loading and local board creation
+- f476123 - Polish operational actions
+- 633a855 - Improve IT operations workflow and task creation
+- 54d0cb3 - Assign seeded tasks to admin user
+
+Resumen de lo construido hasta ahora:
+- UI tipo kanban corporativo para manager de IT.
+- Sidebar derecho conservado con boards, accesos rapidos y chat.
+- Cards mas horizontales con etiquetas visibles de sistema, tipo, decision manager, impacto, urgencia, SLA, checklist, responsable y vencimiento.
+- Modal amplio de card con tabs Card details, Activity y Timing.
+- Edicion inline dentro del card detail: titulo, descripcion, estado, prioridad, sistema, tipo, decision manager, bloqueo, fechas, SLA, propiedades IT y checklist.
+- Comentarios por tarea persistentes.
+- Checklist por tarea con validacion antes de marcar como hecha.
+- Acciones funcionales: crear, editar, mover, archivar, eliminar, asignarme, filtrar, limpiar filtros, exportar CSV y cambiar vistas.
+- Task list convertido en vista operativa con columnas de tarea, responsable, sistema, SLA, vencimiento, estado y prioridad.
+- Operacion diaria con filtros accionables: vencidas, bloqueadas, sin asignar, alta urgencia y cierre pendiente.
+- Modo local persistente para tasks, comments, logs, configuracion IT y boards usando localStorage.
+- Produccion usa Firebase/Firestore para auth, users, boards, tasks, comments, chat y logs.
+- Pages actualizado via GitHub push: https://nostradamesp.github.io/HHRR/
+
+Verificacion reciente:
+- npm run build paso correctamente despues de los ultimos cambios.
+- Git working tree estaba limpio antes de esta actualizacion de progreso.txt.
+
+Pendiente sugerido:
+- Separar tasks por board tambien en modo local, para que cada board local tenga su propio kanban.
+- Revisar reglas de Firestore si Pages vuelve a bloquear creacion/edicion.
+- Hacer una ronda visual final desktop/mobile con screenshots.
