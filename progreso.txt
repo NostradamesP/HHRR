@@ -259,3 +259,14 @@ Fase 5 - Post-publicacion:
 - Ajuste: si un admin/manager abre un board vacio, se muestran tareas iniciales optimistas y se guardan en `boards/{boardId}/tasks`.
 - Ajuste: si no hay usuario o board activo, la lista de tareas se limpia de forma explicita para evitar estados viejos.
 - Ajuste: errores del listener/seed ahora muestran aviso visual en la app.
+
+==============================
+2026-05-29 - Limpieza de configuracion publica
+==============================
+- Eliminados fallbacks hardcodeados de Firebase en `src/firebase.js`.
+- Deploy de GitHub Pages ahora requiere `VITE_FIREBASE_*` desde GitHub Secrets.
+- Secrets `VITE_FIREBASE_*` cargados en el repo `NostradamesP/HHRR` via GitHub CLI.
+- `gmail-addon/` agregado a `.gitignore` para evitar subir claves locales por accidente.
+- Add-on local ajustado para leer `FIREBASE_PROJECT_ID` y `FIREBASE_API_KEY` desde Script Properties.
+- Busqueda actual sin coincidencias de claves Firebase reales, private keys, client secrets o tokens trackeados.
+- Pendiente recomendado: rotar/restringir la Firebase Web API key en Google Cloud porque estuvo en historial de git.
