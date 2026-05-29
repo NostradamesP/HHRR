@@ -135,3 +135,118 @@ Pendiente sugerido:
 - Separar tasks por board tambien en modo local, para que cada board local tenga su propio kanban.
 - Revisar reglas de Firestore si Pages vuelve a bloquear creacion/edicion.
 - Hacer una ronda visual final desktop/mobile con screenshots.
+
+== Ronda 2026-05-29 - card detail editable ==
+
+Cambios aplicados:
+- El card detail pasa a ser la superficie principal de edicion inline.
+- System, Type, Priority, Status/List, Decision manager, Module, Phase, Impact, Urgency, Effort y assignee local usan combobox editable.
+- Valores nuevos escritos en System, Type, Impact, Urgency y equipo se agregan al catalogo IT para reuso.
+- Los filtros de modulo, fase, sistema, tipo y responsable incluyen valores nuevos guardados en cards/catalogos.
+- Checklist en card detail ya no usa prompt del navegador; ahora tiene input inline, boton Agregar y soporte Enter.
+- Accion lateral "Agregar checklist" enfoca el nuevo input inline.
+- Se agrego Requester al bloque de custom properties para poder editar solicitante desde el modal.
+- Se corrigio ChatPanel local para guardar mensajes por board en localStorage y no intentar usar Firebase cuando db es null.
+
+Verificacion:
+- npm run build paso correctamente.
+- Local app carga en http://127.0.0.1:5173/HHRR/.
+- Nueva tarea abre modal, Task list cambia de vista, card detail abre y muestra combobox editables + checklist inline.
+
+== Ronda 2026-05-18 - estabilizacion general + Gmail Add-on ==
+
+Commits:
+- e6b71bb - Fix race conditions, add dedup, password reset, toast feedback, and loading states
+
+Cambios en App.jsx:
+- tasksRef para evitar stale closures en listeners de Firebase
+- detailT reconciliation con onSnapshot para mantener detalle actualizado
+- rollback en patchTask/updateStatus si Firebase falla
+- DnD order interpolacion entre vecinos (evita solapamiento)
+- deleteTask early return (evita eliminar tras cambiar de board)
+- comments onSnapshot con limit(100)
+- patchTask con fallback de titulo si description es undefined
+- exportCSV con revocacion de blob URL
+- readLocalJSON/writeLocalJSON con try/catch para parsing seguro
+- Password reset flow completo en LoginForm (sendPasswordResetEmail, confirmacion, errores en espanol)
+- Loading states (deletingId) en delete/archive buttons, con disabled y opacidad
+- Toast feedback (showToast) en todos los catch de task mutations
+- Firebase config movido a variables de entorno VITE_ con fallback hardcodeado
+- .env, .env.example, .gitignore (con .env), .firebaserc creados
+
+Cambios en BoardContext.jsx:
+- Auto-creacion de boards por usuario (ownerId = uid)
+- Validacion de nombre duplicado scoped por owner
+- try/catch en deleteBoard/addMember/removeMember
+- localStorage wrapper seguro (JSON.parse fallback)
+- Validacion de activeBoardId existe antes de usar
+- Migracion de subcolecciones (tasks, logs) entre boards duplicados
+- Dedup con guard deduped para evitar loops
+
+Cambios en AuthContext.jsx:
+- mounted flag + pendingUserUid para evitar race condition en onAuthStateChanged
+
+Cambios en firestore.rules:
+- Reglas para users, boards, subcolecciones y comments con getUserRole()
+
+Gmail Add-on (gmail-addon/):
+- Code.gs (779 lineas): add-on completo para Gmail
+  - Login via Firebase Auth REST API (signInWithPassword)
+  - Extraccion de asunto/remitente/cuerpo del email actual
+  - Formulario con board selector, modulo, prioridad, tipo
+  - Creacion de tarea + log en Firestore REST API
+  - Manejo de tokens (refresh, cache, expiracion)
+  - Cards de CardService para la UI
+  - i18n parcial en espanol
+- appsscript.json: manifest con urlFetchWhitelist, oauthScopes, addOns config
+- .clasp.json: configuracion de clasp (scriptId)
+
+Apps Script project:
+- Creado y vinculado al GCP project del add-on
+- OAuth consent screen configurado con test user interno
+- Deployments: v9 activo (fix OpenType)
+- Clasp autenticado
+- Script ID: [redacted]
+- API key: [redacted]
+
+Fix aplicado:
+- OpenType.FULL_SIZE removido (CardService.OpenType no existia en este runtime)
+- Deployments v6, v7, v8 eliminados (solo quedan @HEAD y @9)
+
+Estado actual:
+- Add-on funcional: login, crear tarea, success card, boton "Abrir en NoraHR"
+- Kanban web 10/10 funcional con boards y tareas
+- Archivos sin commit: gmail-addon/ y .firebaserc (solo si se desea)
+
+==============================
+PENDIENTE - Marketplace Publishing
+==============================
+Objetivo: Publicar el Gmail add-on en Google Workspace Marketplace
+para que cualquier usuario pueda buscarlo e instalarlo.
+
+Fase 1 - Codigo:
+- Agregar registro de usuarios via Firebase Auth REST (accounts:signUp)
+- Soporte bilingue ES/EN via Session.getActiveUserLocale()
+- Loading states en botones segun review criteria de Google
+- Verificar logout revoca tokens correctamente
+
+Fase 2 - Assets:
+- Crear public/privacy.html y public/tos.html en GH Pages
+- Crear icono 128x128px + 32x32px para el listing
+- Capturar minimo 2 screenshots del add-on funcionando
+
+Fase 3 - Google Cloud Console:
+- Mover OAuth consent screen de Testing a In production
+- Agregar Privacy Policy URL, Support email, Homepage, Authorized domains
+- Iniciar verificacion OAuth (toma dias-semanas)
+- Habilitar Google Workspace Marketplace SDK
+
+Fase 4 - Marketplace Store Listing:
+- Configurar listing: nombre, descripcion ES/EN, iconos, screenshots
+- Developer info, Support URL, Privacy Policy URL
+- Enviar a revision de Google (dias-semanas)
+- Corregir feedback si aplica
+
+Fase 5 - Post-publicacion:
+- Add-on disponible en Marketplace para cualquier usuario
+- Mantener versiones via clasp para updates

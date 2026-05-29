@@ -230,12 +230,66 @@ function csvCell(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
+function cleanValue(value) {
+  return String(value ?? "").trim();
+}
+
+function uniqueOptions(values) {
+  const seen = new Set();
+  return values
+    .map(cleanValue)
+    .filter(Boolean)
+    .filter((value) => {
+      const key = value.toLowerCase();
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function filterTasks(tasks, q, mod, prio, ph) {
   const cq = q.trim().toLowerCase();
   return tasks.filter(t => {
     const st = [t.title, t.module, t.phase, t.priority, t.description, t.system, t.ticketType, t.requester, t.impact, t.urgency].join(" ").toLowerCase();
     return (cq === "" || st.includes(cq)) && (mod === "Todos" || t.module === mod) && (prio === "Todas" || t.priority === prio) && (ph === "Todas" || t.phase === ph);
   });
+}
+
+function EditableCombo({ value, options = [], onCommit, placeholder = "Sin definir", className = "" }) {
+  const [draft, setDraft] = useState(value || "");
+  const listIdRef = useRef(`combo-${Math.random().toString(36).slice(2)}`);
+  const cleanOptions = useMemo(() => uniqueOptions([value, ...options]), [value, options]);
+
+  useEffect(() => {
+    setDraft(value || "");
+  }, [value]);
+
+  function commit() {
+    const next = cleanValue(draft);
+    if ((value || "") !== next) onCommit?.(next);
+  }
+
+  return (
+    <>
+      <input
+        value={draft}
+        list={listIdRef.current}
+        onChange={e => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={e => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder={placeholder}
+        className={className}
+      />
+      <datalist id={listIdRef.current}>
+        {cleanOptions.map(option => <option key={option} value={option} />)}
+      </datalist>
+    </>
+  );
 }
 
 const priorityMeta = {
@@ -283,7 +337,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const isBlocked = task.status === "Bloqueado";
   const isCritical = task.urgency === "Crítica";
   const opKey = getOperationalState(task);
-  const opMeta = operationalStates[opKey] || operationalStates.normal;
+  const opMeta = operationalStates[opKey] || { ...operationalStates.normal, label: opKey || "Normal" };
   const OpIcon = opMeta.icon;
   const slaTone = task.slaHours ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-slate-50 text-slate-400";
   const impactTone = task.impact === "Crítico" || task.impact === "Alto" ? "border-red-100 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-600";
@@ -617,11 +671,12 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
   );
 }
 
-function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false, deletingId }) {
+function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, activeBoardId, users, onTaskPatch, itConfig = defaultItConfig, isLocal = false, deletingId, onCatalogValue, moduleOptions = modules, phaseOptions = Object.keys(phaseMap), statusOptions = statuses }) {
   const [logs, setLogs] = useState([]);
   const [comments, setComments] = useState([]);
   const [commentText, setCommentText] = useState("");
   const [activeTab, setActiveTab] = useState("details");
+  const [newChecklistText, setNewChecklistText] = useState("");
   const { user, userData } = useAuth();
   const isLocalDetailDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const detailUser = user || (isLocalDetailDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
@@ -634,11 +689,11 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
   const priority = priorityMeta[task.priority] || priorityMeta.Media;
   const PriorityIcon = priority.icon;
   const operationalKey = getOperationalState(task);
-  const operationalMeta = operationalStates[operationalKey] || operationalStates.normal;
+  const operationalMeta = operationalStates[operationalKey] || { ...operationalStates.normal, label: operationalKey || "Normal" };
   const OperationalIcon = operationalMeta.icon;
 
   const availableStatuses = isAdmin
-    ? statuses.filter(s => s !== task.status)
+    ? statusOptions.filter(s => s !== task.status)
     : statuses.filter(s => {
         const targetIdx = statusOrder.indexOf(s);
         return targetIdx > currentIdx && s !== "Bloqueado";
@@ -764,6 +819,13 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
     onTaskPatch?.(task.id, { [field]: value });
   }
 
+  function commitField(field, value, catalogKey) {
+    if (!isAdmin) return;
+    const next = cleanValue(value);
+    onTaskPatch?.(task.id, { [field]: next });
+    if (catalogKey && next) onCatalogValue?.(catalogKey, next);
+  }
+
   function markDone() {
     if (task.status === "Hecho") {
       onStatus(task.id, "En progreso");
@@ -793,10 +855,11 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
     patchChecklist((task.checklist || []).map(item => item.id === id ? { ...item, done: !item.done } : item));
   }
 
-  function addChecklistItem() {
-    const text = prompt("Nuevo item de checklist");
-    if (!text?.trim()) return;
-    patchChecklist([...(task.checklist || []), { id: `check-${Date.now()}`, text: text.trim(), done: false }]);
+  function addChecklistItem(value = newChecklistText) {
+    const text = cleanValue(value);
+    if (!text) return;
+    patchChecklist([...(task.checklist || []), { id: `check-${Date.now()}`, text, done: false }]);
+    setNewChecklistText("");
   }
 
   function updateChecklistItem(id, text) {
@@ -810,7 +873,9 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
   function goToSection(id, tab = "details") {
     setActiveTab(tab);
     window.setTimeout(() => {
-      document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const section = document.getElementById(id);
+      section?.scrollIntoView({ behavior: "smooth", block: "start" });
+      section?.querySelector("input, textarea, select, button")?.focus?.();
     }, 60);
   }
 
@@ -964,39 +1029,27 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                   <div className="grid gap-3 sm:grid-cols-2">
                     <InlineField label="List">
                       {isAdmin ? (
-                        <select value={task.status || "Pendiente"} onChange={e => onStatus(task.id, e.target.value)} className={mutedInput}>
-                          {statuses.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
+                        <EditableCombo value={task.status || "Pendiente"} options={statusOptions} onCommit={value => value && onStatus(task.id, value)} className={mutedInput} />
                       ) : <p className={readonlyText}>{task.status}</p>}
                     </InlineField>
                     <InlineField label="Priority">
                       {isAdmin ? (
-                        <select value={task.priority || "Media"} onChange={e => updateField("priority", e.target.value)} className={mutedInput}>
-                          {Object.keys(priorityMeta).map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
+                        <EditableCombo value={task.priority || "Media"} options={Object.keys(priorityMeta)} onCommit={value => commitField("priority", value || "Media")} className={mutedInput} />
                       ) : <p className={readonlyText}>{task.priority}</p>}
                     </InlineField>
                     <InlineField label="System">
                       {isAdmin ? (
-                        <select value={task.system || ""} onChange={e => updateField("system", e.target.value)} className={mutedInput}>
-                          <option value="">Sin definir</option>
-                          {itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
+                        <EditableCombo value={task.system || ""} options={itConfig.systems} onCommit={value => commitField("system", value, "systems")} className={mutedInput} />
                       ) : <p className={readonlyText}>{task.system || "Sin definir"}</p>}
                     </InlineField>
                     <InlineField label="Type">
                       {isAdmin ? (
-                        <select value={task.ticketType || ""} onChange={e => updateField("ticketType", e.target.value)} className={mutedInput}>
-                          <option value="">Sin definir</option>
-                          {itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
-                        </select>
+                        <EditableCombo value={task.ticketType || ""} options={itConfig.ticketTypes} onCommit={value => commitField("ticketType", value, "ticketTypes")} className={mutedInput} />
                       ) : <p className={readonlyText}>{task.ticketType || "Sin definir"}</p>}
                     </InlineField>
                     <InlineField label="Decisión manager">
                       {isAdmin ? (
-                        <select value={task.operationalState || "normal"} onChange={e => updateField("operationalState", e.target.value)} className={mutedInput}>
-                          {Object.entries(operationalStates).map(([key, value]) => <option key={key} value={key}>{value.label}</option>)}
-                        </select>
+                        <EditableCombo value={task.operationalState || "normal"} options={Object.keys(operationalStates)} onCommit={value => commitField("operationalState", value || "normal")} className={mutedInput} />
                       ) : <p className={readonlyText}>{operationalMeta.label}</p>}
                     </InlineField>
                     <InlineField label="Motivo bloqueo">
@@ -1033,17 +1086,17 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                       )}
                     </div>
                     {isLocal ? (
-                      <select
+                      <EditableCombo
                         value={task.assignedName || ""}
-                        onChange={e => {
-                          const name = e.target.value;
+                        options={itConfig.team}
+                        onCommit={value => {
+                          const name = cleanValue(value);
                           onTaskPatch?.(task.id, { assignedName: name, assignedTo: name ? `local-${name}` : "" });
+                          if (name) onCatalogValue?.("team", name);
                         }}
+                        placeholder="Sin asignar"
                         className={mutedInput}
-                      >
-                        <option value="">Sin asignar</option>
-                        {itConfig.team.map(v => <option key={v} value={v}>{v}</option>)}
-                      </select>
+                      />
                     ) : isAdmin && users?.length > 0 ? (
                       <select
                         value={task.assignedTo || ""}
@@ -1105,6 +1158,26 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                         </div>
                       ))}
                       {(!task.checklist || task.checklist.length === 0) && <p className="text-sm text-slate-400">Sin checklist todavía.</p>}
+                      {isAdmin && (
+                        <div className="flex gap-2 rounded-lg border border-dashed border-slate-200 bg-slate-50 p-2">
+                          <input
+                            id="new-checklist-item"
+                            value={newChecklistText}
+                            onChange={e => setNewChecklistText(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                addChecklistItem();
+                              }
+                            }}
+                            placeholder="Agregar item de checklist"
+                            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400"
+                          />
+                          <button type="button" onClick={() => addChecklistItem()} disabled={!newChecklistText.trim()} className="rounded-lg bg-cyan-600 px-3 text-xs font-bold text-white hover:bg-cyan-700 disabled:bg-slate-200">
+                            Agregar
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </section>
 
@@ -1117,34 +1190,25 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                       {isAdmin ? (
                         <>
                           <InlineField label="Module">
-                            <select value={task.module || ""} onChange={e => updateField("module", e.target.value)} className={mutedInput}>
-                              {modules.map(v => <option key={v} value={v}>{v}</option>)}
-                            </select>
+                            <EditableCombo value={task.module || ""} options={moduleOptions} onCommit={value => commitField("module", value)} className={mutedInput} />
                           </InlineField>
                           <InlineField label="Phase">
-                            <select value={task.phase || "V1"} onChange={e => updateField("phase", e.target.value)} className={mutedInput}>
-                              {Object.keys(phaseMap).map(v => <option key={v} value={v}>{v} - {phaseMap[v]}</option>)}
-                            </select>
+                            <EditableCombo value={task.phase || "V1"} options={phaseOptions} onCommit={value => commitField("phase", value || "V1")} className={mutedInput} />
                           </InlineField>
                           <InlineField label="Impact">
-                            <select value={task.impact || ""} onChange={e => updateField("impact", e.target.value)} className={mutedInput}>
-                              <option value="">Sin definir</option>
-                              {itConfig.impacts.map(v => <option key={v} value={v}>{v}</option>)}
-                            </select>
+                            <EditableCombo value={task.impact || ""} options={itConfig.impacts} onCommit={value => commitField("impact", value, "impacts")} className={mutedInput} />
                           </InlineField>
                           <InlineField label="Urgency">
-                            <select value={task.urgency || ""} onChange={e => updateField("urgency", e.target.value)} className={mutedInput}>
-                              <option value="">Sin definir</option>
-                              {itConfig.urgencies.map(v => <option key={v} value={v}>{v}</option>)}
-                            </select>
+                            <EditableCombo value={task.urgency || ""} options={itConfig.urgencies} onCommit={value => commitField("urgency", value, "urgencies")} className={mutedInput} />
                           </InlineField>
                           <InlineField label="Effort">
-                            <select value={task.effort || "Medio"} onChange={e => updateField("effort", e.target.value)} className={mutedInput}>
-                              {Object.keys(effortWeight).map(v => <option key={v} value={v}>{v}</option>)}
-                            </select>
+                            <EditableCombo value={task.effort || "Medio"} options={Object.keys(effortWeight)} onCommit={value => commitField("effort", value || "Medio")} className={mutedInput} />
                           </InlineField>
                           <InlineField label="SLA hours">
                             <input value={task.slaHours || ""} onChange={e => updateField("slaHours", Number(e.target.value) || "")} type="number" min="1" className={mutedInput} />
+                          </InlineField>
+                          <InlineField label="Requester">
+                            <input value={task.requester || ""} onChange={e => updateField("requester", e.target.value)} placeholder="Solicitante" className={mutedInput} />
                           </InlineField>
                         </>
                       ) : (
@@ -1156,6 +1220,7 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                             ["Urgency", task.urgency || "Sin definir"],
                             ["Effort", task.effort || "Sin definir"],
                             ["SLA", task.slaHours ? `${task.slaHours}h` : "Sin definir"],
+                            ["Requester", task.requester || "Sin definir"],
                           ].map(([label, value]) => (
                             <InlineField key={label} label={label}><p className={readonlyText}>{value}</p></InlineField>
                           ))}
@@ -1254,7 +1319,10 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
               <div className="space-y-2">
                 {[
                   [Users, "Asignar responsable", () => goToSection("task-assignees")],
-                  [CheckCircle2, isAdmin ? "Agregar checklist" : "Ver checklist", () => { goToSection("task-checklist"); if (isAdmin) window.setTimeout(addChecklistItem, 120); }],
+                  [CheckCircle2, isAdmin ? "Agregar checklist" : "Ver checklist", () => {
+                    goToSection("task-checklist");
+                    if (isAdmin) window.setTimeout(() => document.getElementById("new-checklist-item")?.focus(), 120);
+                  }],
                   [Calendar, "Abrir fecha / SLA", () => setActiveTab("timing")],
                   [SlidersHorizontal, "Propiedades IT", () => goToSection("task-properties")],
                   [MessageSquare, "Abrir comentarios", () => setActiveTab("activity")],
@@ -1837,12 +1905,20 @@ export default function NoraHRKanban() {
     return tasks.filter(t => !t.archived && isTaskOverdue(t)).length;
   }, [tasks]);
 
+  const statusOptions = useMemo(() => uniqueOptions([...statuses, ...tasks.map(t => t.status)]), [tasks]);
+
   const columns = useMemo(() => {
     const byCol = {};
-    statuses.forEach(s => byCol[s] = []);
+    statusOptions.forEach(s => byCol[s] = []);
     displayedTasks.forEach(t => { if (byCol[t.status]) byCol[t.status].push(t); });
-    return statuses.map(s => ({ status: s, items: byCol[s] }));
-  }, [displayedTasks]);
+    return statusOptions.map(s => ({ status: s, items: byCol[s] }));
+  }, [displayedTasks, statusOptions]);
+
+  const moduleOptions = useMemo(() => uniqueOptions([...modules, ...tasks.map(t => t.module)]), [tasks]);
+  const phaseOptions = useMemo(() => uniqueOptions([...Object.keys(phaseMap), ...tasks.map(t => t.phase)]), [tasks]);
+  const systemOptions = useMemo(() => uniqueOptions([...(itConfig.systems || []), ...tasks.map(t => t.system)]), [itConfig.systems, tasks]);
+  const typeOptions = useMemo(() => uniqueOptions([...(itConfig.ticketTypes || []), ...tasks.map(t => t.ticketType)]), [itConfig.ticketTypes, tasks]);
+  const responsibleOptions = useMemo(() => uniqueOptions([...(itConfig.team || []), ...tasks.map(t => t.assignedName)]), [itConfig.team, tasks]);
 
   const done = tasks.filter(t => t.status === "Hecho").length;
   const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
@@ -1881,6 +1957,16 @@ export default function NoraHRKanban() {
     };
     all[taskId] = [...(all[taskId] || []), log];
     writeLocalJSON(LOCAL_LOGS_KEY, all);
+  }
+
+  function addCatalogValue(key, value) {
+    const clean = cleanValue(value);
+    if (!clean) return;
+    setItConfig(prev => {
+      const current = Array.isArray(prev[key]) ? prev[key] : [];
+      if (current.some(item => item.toLowerCase() === clean.toLowerCase())) return prev;
+      return { ...prev, [key]: [...current, clean] };
+    });
   }
 
   async function archiveTask(id, archived) {
@@ -2248,7 +2334,6 @@ export default function NoraHRKanban() {
     return b ? b.name : "NoraHR Roadmap";
   }, [appBoards, appActiveBoardId]);
 
-  const phasesOptions = ["Todas", ...Object.keys(phaseMap)];
   const hasActiveViewFilters =
     searchQuery ||
     mod !== "Todos" ||
@@ -2426,27 +2511,27 @@ export default function NoraHRKanban() {
 
             <div className={`${showFilters ? "grid" : "hidden"} grid-cols-2 gap-2 md:grid md:grid-cols-[repeat(8,minmax(0,auto))] md:items-center`}>
               <select value={mod} onChange={e => setMod(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                <option value="Todos">Módulos</option>{modules.map(m => <option key={m} value={m}>{m}</option>)}
+                <option value="Todos">Módulos</option>{moduleOptions.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
               <select value={prio} onChange={e => setPrio(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 <option value="Todas">Prioridades</option><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option>
               </select>
               <select value={phase} onChange={e => setPhase(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                {phasesOptions.map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : `${p} - ${phaseMap[p]}`}</option>)}
+                {["Todas", ...phaseOptions].map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : phaseMap[p] ? `${p} - ${phaseMap[p]}` : p}</option>)}
               </select>
               {isLocalDemo && (
                 <>
                   <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Sistemas</option>{itConfig.systems.map(v => <option key={v} value={v}>{v}</option>)}
+                    <option value="Todos">Sistemas</option>{systemOptions.map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                   <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Tipos</option>{itConfig.ticketTypes.map(v => <option key={v} value={v}>{v}</option>)}
+                    <option value="Todos">Tipos</option>{typeOptions.map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                   <select value={slaFilter} onChange={e => setSlaFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                     <option value="Todos">SLA</option><option value="Con SLA">Con SLA</option><option value="Sin SLA">Sin SLA</option><option value="Vencidas">Vencidas</option>
                   </select>
                   <select value={responsibleFilter} onChange={e => setResponsibleFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Responsable</option>{itConfig.team.map(v => <option key={v} value={v}>{v}</option>)}
+                    <option value="Todos">Responsable</option>{responsibleOptions.map(v => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </>
               )}
@@ -2510,7 +2595,7 @@ export default function NoraHRKanban() {
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} deletingId={deletingId} />}
+          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} deletingId={deletingId} onCatalogValue={addCatalogValue} moduleOptions={moduleOptions} phaseOptions={phaseOptions} statusOptions={statusOptions} />}
         </ErrorBoundary>
       </Modal>
 

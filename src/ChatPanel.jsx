@@ -5,15 +5,37 @@ import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
 
+const LOCAL_BOARD_MESSAGES_KEY = "norahr.local.boardMessages";
+
+function readLocalMessages() {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_BOARD_MESSAGES_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function writeLocalMessages(messages) {
+  localStorage.setItem(LOCAL_BOARD_MESSAGES_KEY, JSON.stringify(messages));
+}
+
 export default function ChatPanel() {
   const { user, userData } = useAuth();
   const { activeBoardId } = useBoard();
+  const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
+  const chatUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
+  const chatUserData = userData || (isLocalDemo ? { name: "Demo NoraHR" } : null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const bottomRef = useRef(null);
 
   useEffect(() => {
     if (!activeBoardId) return;
+    if (!db || isLocalDemo) {
+      const all = readLocalMessages();
+      setMessages(all[activeBoardId] || []);
+      return;
+    }
     const q = query(
       collection(db, "boards", activeBoardId, "messages"),
       orderBy("createdAt", "asc"),
@@ -25,7 +47,7 @@ export default function ChatPanel() {
       console.error("Chat messages listener error:", err);
     });
     return unsub;
-  }, [activeBoardId]);
+  }, [activeBoardId, isLocalDemo]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -33,12 +55,28 @@ export default function ChatPanel() {
 
   async function sendMessage(e) {
     e.preventDefault();
-    if (!text.trim() || !activeBoardId || !user) return;
+    const cleanText = text.trim();
+    if (!cleanText || !activeBoardId || !chatUser) return;
+    if (!db || isLocalDemo) {
+      const all = readLocalMessages();
+      const nextMessage = {
+        id: `local-message-${Date.now()}`,
+        userId: chatUser.uid,
+        userName: chatUserData?.name || chatUser.email,
+        text: cleanText,
+        createdAt: new Date().toISOString(),
+      };
+      const nextMessages = [...(all[activeBoardId] || []), nextMessage];
+      writeLocalMessages({ ...all, [activeBoardId]: nextMessages });
+      setMessages(nextMessages);
+      setText("");
+      return;
+    }
     try {
       await addDoc(collection(db, "boards", activeBoardId, "messages"), {
-        userId: user.uid,
-        userName: userData?.name || user.email,
-        text: text.trim(),
+        userId: chatUser.uid,
+        userName: chatUserData?.name || chatUser.email,
+        text: cleanText,
         createdAt: serverTimestamp(),
       });
       setText("");
