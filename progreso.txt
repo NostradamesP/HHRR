@@ -250,3 +250,12 @@ Fase 4 - Marketplace Store Listing:
 Fase 5 - Post-publicacion:
 - Add-on disponible en Marketplace para cualquier usuario
 - Mantener versiones via clasp para updates
+
+==============================
+2026-05-29 - Fix carga vacia despues de login
+==============================
+- Revisado bug de produccion/local donde el board podia subir vacio hasta crear una card.
+- Causa probable: el listener dejaba `tasks` en [] cuando Firestore devolvia snapshot vacio y el auto-seed dependia de admin + nombre exacto del board.
+- Ajuste: si un admin/manager abre un board vacio, se muestran tareas iniciales optimistas y se guardan en `boards/{boardId}/tasks`.
+- Ajuste: si no hay usuario o board activo, la lista de tareas se limpia de forma explicita para evitar estados viejos.
+- Ajuste: errores del listener/seed ahora muestran aviso visual en la app.

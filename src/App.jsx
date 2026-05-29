@@ -186,6 +186,28 @@ function enrichLocalTask(task, idx, config = defaultItConfig) {
   };
 }
 
+function buildSeedTask(task, idx, owner, baseOrder = Date.now()) {
+  const { id, ...data } = task;
+  return {
+    ...data,
+    order: baseOrder + idx,
+    dueDate: data.dueDate || "",
+    archived: false,
+    assignedTo: data.assignedTo || owner.uid,
+    assignedName: data.assignedName || owner.name,
+    operationalState: data.operationalState || "normal",
+    blockedReason: data.blockedReason || "",
+    ticketType: data.ticketType || "",
+    requester: data.requester || "Operaciones IT",
+    system: data.system || "",
+    impact: data.impact || "Medio",
+    urgency: data.urgency || "Media",
+    slaHours: data.slaHours || 72,
+    checklist: Array.isArray(data.checklist) && data.checklist.length ? data.checklist : makeChecklist(data.title),
+    createdBy: data.createdBy || owner.uid,
+  };
+}
+
 function checklistProgress(task) {
   const items = Array.isArray(task.checklist) ? task.checklist : [];
   if (!items.length) return { done: 0, total: 0, pct: 0 };
@@ -1687,7 +1709,11 @@ export default function NoraHRKanban() {
       localLoaded.current = true;
       return;
     }
-    if (!user || !activeBoardId) return;
+    if (!user || !activeBoardId) {
+      setTasks([]);
+      tasksRef.current = [];
+      return;
+    }
     const q = query(collection(db, "boards", activeBoardId, "tasks"), orderBy("order", "asc"));
     const unsub = onSnapshot(q, (snap) => {
       const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1720,50 +1746,46 @@ export default function NoraHRKanban() {
           )
         );
       }
-      if (snap.empty && appIsAdmin && !seeded.current[activeBoardId]) {
+      if (snap.empty && appCanCreate && !seeded.current[activeBoardId]) {
         seeded.current[activeBoardId] = true;
-        const board = boardsRef.current.find(b => b.id === activeBoardId);
-        if (board && board.name === "NoraHR Roadmap") {
-          (async () => {
-            try {
-              const results = await Promise.allSettled(
-                initialTasks.map(async (t, idx) => {
-                  const { id, ...data } = t;
-                  return addDoc(collection(db, "boards", activeBoardId, "tasks"), {
-                    ...data,
-                    order: Date.now() + idx,
-                    dueDate: "",
-                    archived: false,
-                    assignedTo: user.uid,
-                    assignedName: adminName,
-                    operationalState: "normal",
-                    blockedReason: "",
-                    ticketType: "",
-                    requester: "Operaciones IT",
-                    system: "",
-                    impact: "Medio",
-                    urgency: "Media",
-                    slaHours: 72,
-                    checklist: makeChecklist(data.title),
-                    createdBy: user.uid,
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                  });
+        const baseOrder = Date.now();
+        const seedOwner = { uid: user.uid, name: adminName };
+        const seedTasks = initialTasks.map((t, idx) => buildSeedTask(t, idx, seedOwner, baseOrder));
+        const optimisticTasks = seedTasks.map((t, idx) => ({ ...t, id: `seed-${initialTasks[idx].id || idx}` }));
+        setTasks(optimisticTasks);
+        tasksRef.current = optimisticTasks;
+        (async () => {
+          try {
+            const results = await Promise.allSettled(
+              seedTasks.map((task) =>
+                addDoc(collection(db, "boards", activeBoardId, "tasks"), {
+                  ...task,
+                  createdAt: serverTimestamp(),
+                  updatedAt: serverTimestamp(),
                 })
-              );
-              const rejected = results.filter(r => r.status === "rejected");
-              if (rejected.length > 0) console.error("Error seeding tasks:", rejected);
-            } catch (e) {
-              console.error("Error seeding tasks:", e);
+              )
+            );
+            const rejected = results.filter(r => r.status === "rejected");
+            if (rejected.length > 0) {
+              console.error("Error seeding tasks:", rejected);
+              showToast("No se pudieron cargar las tareas iniciales del board.");
+              if (rejected.length === results.length) {
+                setTasks([]);
+                tasksRef.current = [];
+              }
             }
-          })();
-        }
+          } catch (e) {
+            console.error("Error seeding tasks:", e);
+            showToast("No se pudieron cargar las tareas iniciales del board.");
+          }
+        })();
       }
     }, (err) => {
       console.error("Tasks listener error:", err);
+      showToast("No se pudieron cargar las tareas del board.");
     });
     return unsub;
-  }, [user, userData, appIsAdmin, activeBoardId, isLocalDemo]);
+  }, [user, userData, appIsAdmin, appCanCreate, activeBoardId, isLocalDemo, showToast]);
 
   useEffect(() => {
     if (!isLocalDemo || !localLoaded.current) return;
