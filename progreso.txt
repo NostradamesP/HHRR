@@ -270,3 +270,16 @@ Fase 5 - Post-publicacion:
 - Add-on local ajustado para leer `FIREBASE_PROJECT_ID` y `FIREBASE_API_KEY` desde Script Properties.
 - Busqueda actual sin coincidencias de claves Firebase reales, private keys, client secrets o tokens trackeados.
 - Pendiente recomendado: rotar/restringir la Firebase Web API key en Google Cloud porque estuvo en historial de git.
+
+==============================
+2026-06-10 - Ronda bugfix boards + Gantt
+==============================
+- Eliminado auto-relleno global de tareas en boards vacios para evitar cards cruzadas entre boards.
+- Boards nuevos en produccion quedan vacios y muestran empty state con accion Nueva tarea.
+- En local, tareas demo pasan a guardarse por board con claves `norahr.local.tasks.{boardId}`.
+- Cambio de board limpia tareas/detalle/drag activo mientras carga el snapshot correcto.
+- Drag and drop ahora usa columnas droppable completas y actualizacion optimista con rollback si falla Firebase.
+- Cards compactadas: menos padding, badges mas pequenos y metadata mas densa conservando etiquetas principales.
+- Agregada pestaña Gantt junto a Kanban/Task list, con lista lateral, timeline horizontal y barras por startDate/dueDate.
+- Agregado campo opcional `startDate` en creacion y detalle de card; si falta, Gantt usa dueDate como tarea de un dia.
+- Tareas sin dueDate aparecen como Sin fecha en el panel izquierdo del Gantt.

@@ -107,6 +107,10 @@ const LOCAL_COMMENTS_KEY = "norahr.local.comments";
 const LOCAL_IT_CONFIG_KEY = "norahr.local.itConfig";
 const LOCAL_LOGS_KEY = "norahr.local.logs";
 
+function localTasksKey(boardId) {
+  return `${LOCAL_TASKS_KEY}.${boardId || "local-demo-board"}`;
+}
+
 const defaultItConfig = {
   systems: ["Network", "Microsoft 365", "Active Directory", "Firewall", "Endpoints", "ERP"],
   ticketTypes: ["Incidente", "Cambio", "Mantenimiento", "Acceso", "Proyecto"],
@@ -170,6 +174,7 @@ function enrichLocalTask(task, idx, config = defaultItConfig) {
     ...task,
     id: String(task.id),
     order: task.order ?? idx,
+    startDate: task.startDate || "",
     dueDate: task.dueDate || "",
     archived: Boolean(task.archived),
     assignedTo: task.assignedTo || "local-demo-user",
@@ -183,28 +188,6 @@ function enrichLocalTask(task, idx, config = defaultItConfig) {
     checklist: Array.isArray(task.checklist) && task.checklist.length ? task.checklist : makeChecklist(task.title),
     operationalState: task.operationalState || "normal",
     blockedReason: task.blockedReason || "",
-  };
-}
-
-function buildSeedTask(task, idx, owner, baseOrder = Date.now()) {
-  const { id, ...data } = task;
-  return {
-    ...data,
-    order: baseOrder + idx,
-    dueDate: data.dueDate || "",
-    archived: false,
-    assignedTo: data.assignedTo || owner.uid,
-    assignedName: data.assignedName || owner.name,
-    operationalState: data.operationalState || "normal",
-    blockedReason: data.blockedReason || "",
-    ticketType: data.ticketType || "",
-    requester: data.requester || "Operaciones IT",
-    system: data.system || "",
-    impact: data.impact || "Medio",
-    urgency: data.urgency || "Media",
-    slaHours: data.slaHours || 72,
-    checklist: Array.isArray(data.checklist) && data.checklist.length ? data.checklist : makeChecklist(data.title),
-    createdBy: data.createdBy || owner.uid,
   };
 }
 
@@ -250,6 +233,30 @@ function operationalRank(task) {
 
 function csvCell(value) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
+}
+
+function parseTaskDate(value) {
+  if (!value) return null;
+  const d = new Date(`${value}T00:00:00`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function addDays(date, days) {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function diffDays(a, b) {
+  const start = new Date(a);
+  const end = new Date(b);
+  start.setHours(0, 0, 0, 0);
+  end.setHours(0, 0, 0, 0);
+  return Math.round((end - start) / 86400000);
+}
+
+function shortDate(date) {
+  return date.toLocaleDateString("es-DO", { day: "numeric", month: "short" });
 }
 
 function cleanValue(value) {
@@ -346,9 +353,8 @@ function FieldPill({ icon: Icon, children, className = "" }) {
 }
 
 function DroppableZone({ status }) {
-  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}` });
   return (
-    <div ref={setNodeRef} className={`min-h-[42px] rounded-lg border border-dashed transition-colors ${isOver ? "border-cyan-300 bg-cyan-50" : "border-transparent"}`} />
+    <div className="min-h-[34px] rounded-lg border border-dashed border-transparent transition-colors group-data-[over=true]:border-cyan-300 group-data-[over=true]:bg-cyan-50" />
   );
 }
 
@@ -364,37 +370,36 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const slaTone = task.slaHours ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-slate-50 text-slate-400";
   const impactTone = task.impact === "Crítico" || task.impact === "Alto" ? "border-red-100 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-600";
   const urgencyTone = task.urgency === "Crítica" || task.urgency === "Alta" ? "border-amber-100 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600";
-  const badgeBase = "inline-flex min-h-[24px] max-w-full items-center gap-1.5 rounded-md border px-2 py-1 text-[11px] font-semibold leading-none";
+  const badgeBase = "inline-flex h-[22px] max-w-[132px] items-center gap-1 rounded-md border px-1.5 text-[10px] font-semibold leading-none";
 
   function CardBadge({ icon: Icon, children, className = "" }) {
     return (
       <span className={`${badgeBase} ${className}`}>
-        {Icon && <Icon className="h-3.5 w-3.5 shrink-0" />}
+        {Icon && <Icon className="h-3 w-3 shrink-0" />}
         <span className="truncate">{children}</span>
       </span>
     );
   }
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-1.5">
       <div className="flex items-start justify-between gap-2">
-        <h3 className="flex min-w-0 flex-1 items-start gap-2 pr-7 text-[14px] font-bold leading-snug text-slate-950">
-          <PriorityIcon className={`mt-0.5 h-4 w-4 shrink-0 ${meta.tone.split(" ")[0]}`} />
+        <h3 className="flex min-w-0 flex-1 items-start gap-1.5 pr-6 text-[13px] font-bold leading-snug text-slate-950">
+          <PriorityIcon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${meta.tone.split(" ")[0]}`} />
           <span className="line-clamp-2">{task.title}</span>
-          {isBlocked && <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />}
+          {isBlocked && <Lock className="mt-0.5 h-3 w-3 shrink-0 text-red-500" />}
         </h3>
       </div>
 
-      <div className="flex flex-wrap gap-1.5">
+      <div className="flex flex-wrap gap-1">
         <CardBadge icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system || "Sin sistema"}</CardBadge>
         <CardBadge className="border-slate-200 bg-white text-slate-700">{task.ticketType || "Sin tipo"}</CardBadge>
-        <CardBadge icon={OpIcon} className={opMeta.tone}>{opMeta.label}</CardBadge>
         <div className="min-w-0">
           {isAdmin ? (
             <select value={task.module} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { module: e.target.value }); }}
               onPointerDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}
-              className={`min-h-[24px] max-w-[132px] rounded-md border px-2 py-1 text-[11px] font-semibold outline-none ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+              className={`h-[22px] max-w-[116px] rounded-md border px-1.5 text-[10px] font-semibold outline-none ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
               {modules.map(m => <option key={m} value={m}>{m}</option>)}
             </select>
           ) : (
@@ -408,7 +413,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
             <select value={task.phase} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { phase: e.target.value }); }}
               onPointerDown={e => e.stopPropagation()}
               onClick={e => e.stopPropagation()}
-              className={`min-h-[24px] rounded-md border px-2 py-1 text-[11px] font-semibold outline-none ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
+              className={`h-[22px] rounded-md border px-1.5 text-[10px] font-semibold outline-none ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
               {Object.entries(phaseMap).map(([k]) => <option key={k} value={k}>{k}</option>)}
             </select>
           ) : (
@@ -420,17 +425,18 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
         <CardBadge icon={PriorityIcon} className={meta.tone}>{task.priority || "Prioridad"}</CardBadge>
       </div>
 
-      <div className="flex flex-wrap gap-1.5 border-t border-slate-100 pt-2">
+      <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 pt-1.5">
+        <CardBadge icon={OpIcon} className={opMeta.tone}>{opMeta.label}</CardBadge>
         <CardBadge icon={Gauge} className={impactTone}>Impacto: {task.impact || "N/D"}</CardBadge>
         <CardBadge icon={Flame} className={urgencyTone}>Urgencia: {task.urgency || "N/D"}</CardBadge>
         <CardBadge icon={Clock3} className={slaTone}>{task.slaHours ? `${task.slaHours}h SLA` : "Sin SLA"}</CardBadge>
         <CardBadge icon={CheckCircle2} className="border-slate-200 bg-slate-50 text-slate-600">{checklist.done}/{checklist.total}</CardBadge>
         {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
-        <div className="flex shrink-0 items-center">
+        <div className="ml-auto flex shrink-0 items-center">
           {task.assignedName ? (
-            <Avatar name={task.assignedName} />
+            <Avatar name={task.assignedName} size="sm" />
           ) : (
-            <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-300">
+            <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-300">
               <User className="h-3 w-3" />
             </span>
           )}
@@ -465,15 +471,15 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
   return (
     <div ref={setNodeRef} style={s} {...attributes} {...listeners}
       onClick={openCard}
-      className={`group relative rounded-lg border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
+      className={`group relative rounded-lg border border-slate-200/80 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
       {isAdmin && !deleteMode && (
         <button
           type="button"
           aria-label="Arrastrar tarea"
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+          className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
         >
-          <MoreVertical className="h-3.5 w-3.5" />
+          <MoreVertical className="h-3 w-3" />
         </button>
       )}
       {deleteMode && isAdmin && (
@@ -491,6 +497,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
 }
 
 function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal, users, deletingId }) {
+  const { setNodeRef, isOver } = useDroppable({ id: `column-${status}`, disabled: !isAdmin || deleteMode });
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
   const colProgress = colTotal ? Math.round((colDone / colTotal) * 100) : 0;
@@ -499,7 +506,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
   const StatusIcon = colAccents.icon;
 
   return (
-    <div className="min-w-[340px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm md:min-w-0">
+    <div ref={setNodeRef} data-over={isOver ? "true" : "false"} className={`group min-w-[320px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm transition-colors md:min-w-0 ${isOver ? "ring-2 ring-cyan-200" : ""}`}>
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">
           <button onClick={() => toggleCollapse(status)} className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700">
@@ -555,6 +562,149 @@ function DueDateBadge({ dueDate }) {
   return <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${color}`}>{isOverdue ? <Flame className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}{label}</span>;
 }
 
+function GanttView({ tasks, onSelect, onAdd, canCreate }) {
+  const dayWidth = 28;
+  const rowHeight = 42;
+  const datedTasks = tasks
+    .map(task => {
+      const due = parseTaskDate(task.dueDate);
+      if (!due) return null;
+      const rawStart = parseTaskDate(task.startDate) || due;
+      const start = rawStart > due ? due : rawStart;
+      const end = rawStart > due ? rawStart : due;
+      return { task, start, end };
+    })
+    .filter(Boolean);
+  const undatedTasks = tasks.filter(task => !parseTaskDate(task.dueDate));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const range = useMemo(() => {
+    if (datedTasks.length === 0) {
+      const start = addDays(today, -7);
+      return { start, end: addDays(today, 35) };
+    }
+    const minStart = datedTasks.reduce((min, item) => item.start < min ? item.start : min, datedTasks[0].start);
+    const maxEnd = datedTasks.reduce((max, item) => item.end > max ? item.end : max, datedTasks[0].end);
+    return { start: addDays(minStart, -7), end: addDays(maxEnd, 14) };
+  }, [tasks]);
+
+  const days = Math.max(diffDays(range.start, range.end) + 1, 21);
+  const width = days * dayWidth;
+  const todayOffset = diffDays(range.start, today) * dayWidth;
+  const monthLabels = [];
+  for (let cursor = new Date(range.start); cursor <= range.end; cursor = addDays(cursor, 1)) {
+    if (cursor.getDate() === 1 || monthLabels.length === 0) {
+      monthLabels.push({
+        label: cursor.toLocaleDateString("es-DO", { month: "short", year: "2-digit" }),
+        left: diffDays(range.start, cursor) * dayWidth,
+      });
+    }
+  }
+
+  return (
+    <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+        <div>
+          <h2 className="text-sm font-black text-slate-900">Gantt</h2>
+          <p className="text-xs font-semibold text-slate-400">{datedTasks.length} con fecha · {undatedTasks.length} sin fecha</p>
+        </div>
+        {canCreate && (
+          <button onClick={() => onAdd?.("Pendiente")} className="flex h-8 items-center gap-1.5 rounded-lg bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700">
+            <Plus className="h-3.5 w-3.5" /> Nueva tarea
+          </button>
+        )}
+      </div>
+      <div className="grid min-h-[520px] grid-cols-[300px_1fr] overflow-hidden">
+        <div className="border-r border-slate-200 bg-white">
+          <div className="flex h-[64px] items-end border-b border-slate-200 px-3 pb-2 text-[11px] font-black uppercase text-slate-400">
+            Tareas
+          </div>
+          <div>
+            {datedTasks.map(({ task }) => (
+              <button key={task.id} onClick={() => onSelect(task)} className="flex h-[42px] w-full items-center gap-2 border-b border-slate-100 px-3 text-left hover:bg-slate-50">
+                <Avatar name={task.assignedName || "Sin asignar"} size="sm" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-black text-slate-800">{task.title}</span>
+                  <span className="block truncate text-[10px] font-semibold text-slate-400">{task.system || "Sin sistema"} · {task.status}</span>
+                </span>
+              </button>
+            ))}
+            {undatedTasks.map(task => (
+              <button key={task.id} onClick={() => onSelect(task)} className="flex h-[42px] w-full items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 text-left hover:bg-slate-100">
+                <Calendar className="h-4 w-4 shrink-0 text-slate-300" />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-bold text-slate-600">{task.title}</span>
+                  <span className="block text-[10px] font-semibold text-slate-400">Sin fecha</span>
+                </span>
+              </button>
+            ))}
+            {tasks.length === 0 && (
+              <div className="px-4 py-10 text-center text-sm font-semibold text-slate-400">Este board no tiene tareas.</div>
+            )}
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <div className="relative" style={{ width }}>
+            <div className="sticky top-0 z-10 h-[64px] border-b border-slate-200 bg-white">
+              <div className="relative h-8 border-b border-slate-100">
+                {monthLabels.map((m, idx) => (
+                  <span key={`${m.label}-${idx}`} className="absolute top-2 text-[11px] font-black uppercase text-slate-500" style={{ left: m.left + 8 }}>
+                    {m.label}
+                  </span>
+                ))}
+              </div>
+              <div className="relative h-8">
+                {Array.from({ length: days }).map((_, idx) => {
+                  const date = addDays(range.start, idx);
+                  const isWeek = date.getDay() === 1 || idx === 0;
+                  return isWeek ? (
+                    <span key={idx} className="absolute top-2 text-[10px] font-bold text-slate-400" style={{ left: idx * dayWidth + 6 }}>
+                      {shortDate(date)}
+                    </span>
+                  ) : null;
+                })}
+              </div>
+            </div>
+            <div className="relative" style={{ height: Math.max((datedTasks.length + undatedTasks.length) * rowHeight, 420) }}>
+              {Array.from({ length: days }).map((_, idx) => (
+                <span key={idx} className={`absolute top-0 h-full border-l ${idx % 7 === 0 ? "border-slate-200" : "border-slate-100"}`} style={{ left: idx * dayWidth }} />
+              ))}
+              {todayOffset >= 0 && todayOffset <= width && (
+                <span className="absolute top-0 z-10 h-full border-l-2 border-red-500/70" style={{ left: todayOffset }}>
+                  <span className="ml-1 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white">Hoy</span>
+                </span>
+              )}
+              {datedTasks.map(({ task, start, end }, idx) => {
+                const left = diffDays(range.start, start) * dayWidth;
+                const barWidth = Math.max((diffDays(start, end) + 1) * dayWidth, 18);
+                const meta = priorityMeta[task.priority] || priorityMeta.Media;
+                const blocked = getOperationalState(task) === "blocked";
+                const overdue = isTaskOverdue(task);
+                const barColor = blocked ? "bg-rose-500" : overdue ? "bg-red-500" : task.status === "Hecho" ? "bg-emerald-500" : "bg-cyan-600";
+                return (
+                  <button
+                    key={task.id}
+                    onClick={() => onSelect(task)}
+                    className="absolute flex h-7 items-center rounded-md text-left shadow-sm transition-transform hover:scale-[1.01] hover:shadow-md"
+                    style={{ left, top: idx * rowHeight + 8, width: barWidth }}
+                    title={`${task.title} · ${shortDate(start)} - ${shortDate(end)}`}
+                  >
+                    <span className={`flex h-full w-full items-center gap-1 overflow-hidden rounded-md px-2 text-[11px] font-black text-white ${barColor}`}>
+                      <Flag className={`h-3 w-3 shrink-0 ${meta.tone.split(" ")[0]}`} />
+                      <span className="truncate">{task.title}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Modal({ open, onClose, children, wide = false }) {
   useEffect(() => { if (open) document.body.style.overflow = "hidden"; else document.body.style.overflow = ""; return () => { document.body.style.overflow = ""; }; }, [open]);
   if (!open) return null;
@@ -578,6 +728,7 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
     description: "",
     assignedTo: "",
     assignedName: "",
+    startDate: "",
     dueDate: "",
     ticketType: itConfig.ticketTypes[0] || "",
     requester: "Operaciones IT",
@@ -631,7 +782,10 @@ function TaskForm({ onSave, onClose, initial, users, itConfig = defaultItConfig,
         <select value={f.priority} onChange={e => setF({ ...f, priority: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900"><option value="Alta">Alta</option><option value="Media">Media</option><option value="Baja">Baja</option></select>
         <select value={f.effort} onChange={e => setF({ ...f, effort: e.target.value })} className="rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900"><option value="Alto">Alto</option><option value="Medio">Medio</option><option value="Bajo">Bajo</option></select>
       </div>
-      <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+      <div className="grid gap-2 sm:grid-cols-2">
+        <input value={f.startDate || ""} onChange={e => setF({ ...f, startDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+        <input value={f.dueDate || ""} onChange={e => setF({ ...f, dueDate: e.target.value })} type="date" className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors" />
+      </div>
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-3">
         <h3 className="text-xs font-black uppercase text-slate-400">Campos IT</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1149,9 +1303,19 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                       <Calendar className="h-5 w-5 text-slate-300" />
                     </div>
                     {isAdmin ? (
-                      <input type="date" value={task.dueDate || ""} onChange={e => updateField("dueDate", e.target.value)} className={mutedInput} />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <InlineField label="Start">
+                          <input type="date" value={task.startDate || ""} onChange={e => updateField("startDate", e.target.value)} className={mutedInput} />
+                        </InlineField>
+                        <InlineField label="Due">
+                          <input type="date" value={task.dueDate || ""} onChange={e => updateField("dueDate", e.target.value)} className={mutedInput} />
+                        </InlineField>
+                      </div>
                     ) : task.dueDate ? (
-                      <DueDateBadge dueDate={task.dueDate} />
+                      <div className="flex flex-wrap gap-2">
+                        <FieldPill icon={Calendar}>{task.startDate ? `Inicio ${new Date(task.startDate).toLocaleDateString()}` : "Sin inicio"}</FieldPill>
+                        <DueDateBadge dueDate={task.dueDate} />
+                      </div>
                     ) : (
                       <p className="text-sm text-slate-400">Sin fecha límite</p>
                     )}
@@ -1277,6 +1441,9 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   <InlineField label="Due date">
                     {isAdmin ? <input type="date" value={task.dueDate || ""} onChange={e => updateField("dueDate", e.target.value)} className={mutedInput} /> : <p className={readonlyText}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha"}</p>}
+                  </InlineField>
+                  <InlineField label="Start date">
+                    {isAdmin ? <input type="date" value={task.startDate || ""} onChange={e => updateField("startDate", e.target.value)} className={mutedInput} /> : <p className={readonlyText}>{task.startDate ? new Date(task.startDate).toLocaleDateString() : "Sin fecha"}</p>}
                   </InlineField>
                   <InlineField label="Última actualización"><p className={readonlyText}>{task.updatedAt ? formatTimestamp(task.updatedAt) : "Sin registro"}</p></InlineField>
                   <InlineField label="Creada"><p className={readonlyText}>{task.createdAt ? formatTimestamp(task.createdAt) : "Sin registro"}</p></InlineField>
@@ -1686,12 +1853,12 @@ export default function NoraHRKanban() {
   const appCanCreate = appIsAdmin || appUserLevel === "manager" || appUserLevel === "admin";
   const appCanEdit = appCanCreate || appUserLevel === "editor";
   const activeTask = useMemo(() => tasks.find(t => t.id === activeId), [activeId, tasks]);
-  const seeded = useRef({});
   const migrated = useRef(false);
   const boardsRef = useRef(appBoards);
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
   const localLoaded = useRef(false);
+  const skipNextLocalWrite = useRef(false);
   boardsRef.current = appBoards;
 
   const sensors = useSensors(
@@ -1701,19 +1868,34 @@ export default function NoraHRKanban() {
 
   useEffect(() => {
     if (isLocalDemo) {
-      const saved = readLocalJSON(LOCAL_TASKS_KEY, null);
-      const localTasks = Array.isArray(saved) && saved.length
-        ? saved.map((t, idx) => enrichLocalTask(t, idx, itConfig))
-        : initialTasks.map((t, idx) => enrichLocalTask(t, idx, itConfig));
+      localLoaded.current = false;
+      const localBoardId = activeBoardId || "local-demo-board";
+      const saved = readLocalJSON(localTasksKey(localBoardId), null);
+      const legacySaved = localBoardId === "local-demo-board" ? readLocalJSON(LOCAL_TASKS_KEY, null) : null;
+      const source = Array.isArray(saved) ? saved : legacySaved;
+      const localTasks = Array.isArray(source) && source.length
+        ? source.map((t, idx) => enrichLocalTask(t, idx, itConfig))
+        : localBoardId === "local-demo-board"
+          ? initialTasks.map((t, idx) => enrichLocalTask(t, idx, itConfig))
+          : [];
+      skipNextLocalWrite.current = true;
       setTasks(localTasks);
+      setDetailT(null);
+      setActiveId(null);
       localLoaded.current = true;
       return;
     }
     if (!user || !activeBoardId) {
       setTasks([]);
       tasksRef.current = [];
+      setDetailT(null);
+      setActiveId(null);
       return;
     }
+    setTasks([]);
+    tasksRef.current = [];
+    setDetailT(null);
+    setActiveId(null);
     const q = query(collection(db, "boards", activeBoardId, "tasks"), orderBy("order", "asc"));
     const unsub = onSnapshot(q, (snap) => {
       const ts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -1722,7 +1904,7 @@ export default function NoraHRKanban() {
       setDetailT(prev => {
         if (!prev) return prev;
         const updated = ts.find(t => t.id === prev.id);
-        return updated || prev;
+        return updated || null;
       });
       const missingOrder = ts.filter(t => t.order === undefined || t.order === null);
       if (missingOrder.length > 0) {
@@ -1746,51 +1928,21 @@ export default function NoraHRKanban() {
           )
         );
       }
-      if (snap.empty && appCanCreate && !seeded.current[activeBoardId]) {
-        seeded.current[activeBoardId] = true;
-        const baseOrder = Date.now();
-        const seedOwner = { uid: user.uid, name: adminName };
-        const seedTasks = initialTasks.map((t, idx) => buildSeedTask(t, idx, seedOwner, baseOrder));
-        const optimisticTasks = seedTasks.map((t, idx) => ({ ...t, id: `seed-${initialTasks[idx].id || idx}` }));
-        setTasks(optimisticTasks);
-        tasksRef.current = optimisticTasks;
-        (async () => {
-          try {
-            const results = await Promise.allSettled(
-              seedTasks.map((task) =>
-                addDoc(collection(db, "boards", activeBoardId, "tasks"), {
-                  ...task,
-                  createdAt: serverTimestamp(),
-                  updatedAt: serverTimestamp(),
-                })
-              )
-            );
-            const rejected = results.filter(r => r.status === "rejected");
-            if (rejected.length > 0) {
-              console.error("Error seeding tasks:", rejected);
-              showToast("No se pudieron cargar las tareas iniciales del board.");
-              if (rejected.length === results.length) {
-                setTasks([]);
-                tasksRef.current = [];
-              }
-            }
-          } catch (e) {
-            console.error("Error seeding tasks:", e);
-            showToast("No se pudieron cargar las tareas iniciales del board.");
-          }
-        })();
-      }
     }, (err) => {
       console.error("Tasks listener error:", err);
       showToast("No se pudieron cargar las tareas del board.");
     });
     return unsub;
-  }, [user, userData, appIsAdmin, appCanCreate, activeBoardId, isLocalDemo, showToast]);
+  }, [user, userData, appIsAdmin, activeBoardId, isLocalDemo, showToast, itConfig]);
 
   useEffect(() => {
     if (!isLocalDemo || !localLoaded.current) return;
-    writeLocalJSON(LOCAL_TASKS_KEY, tasks);
-  }, [tasks, isLocalDemo]);
+    if (skipNextLocalWrite.current) {
+      skipNextLocalWrite.current = false;
+      return;
+    }
+    writeLocalJSON(localTasksKey(activeBoardId || "local-demo-board"), tasks);
+  }, [tasks, isLocalDemo, activeBoardId]);
 
   useEffect(() => {
     if (!isLocalDemo) return;
@@ -2014,12 +2166,18 @@ export default function NoraHRKanban() {
 
   async function handleDragEnd(e) {
     const { active, over } = e;
-    if (!over || !appIsAdmin) return;
+    if (!over || !appIsAdmin) {
+      setActiveId(null);
+      return;
+    }
 
     const currentTasks = tasksRef.current;
     const taskId = String(active.id);
     const task = currentTasks.find(t => t.id === taskId);
-    if (!task) return;
+    if (!task) {
+      setActiveId(null);
+      return;
+    }
 
     const overStr = String(over.id);
     let newStatus = null;
@@ -2070,8 +2228,13 @@ export default function NoraHRKanban() {
         }
       }
 
+      const optimisticPatch = { ...(newStatus ? { status: newStatus } : {}), ...opPatch, order: newOrder };
+      const previousTasks = currentTasks;
+      const nextTasks = currentTasks.map(t => t.id === taskId ? { ...t, ...optimisticPatch } : t);
+      setTasks(nextTasks);
+      tasksRef.current = nextTasks;
+
       if (isLocalDemo) {
-        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...(newStatus ? { status: newStatus } : {}), ...opPatch, order: newOrder } : t));
         if (newStatus) createLocalLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
         setActiveId(null);
         return;
@@ -2084,6 +2247,8 @@ export default function NoraHRKanban() {
         if (newStatus) createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
         console.error("Error updating task status:", e);
+        setTasks(previousTasks);
+        tasksRef.current = previousTasks;
         showToast("Error al actualizar el estado de la tarea");
       }
     }
@@ -2146,6 +2311,7 @@ export default function NoraHRKanban() {
         description: f.description || "",
         status: newTaskStatus,
         order: Date.now(),
+        startDate: f.startDate || "",
         dueDate: f.dueDate || "",
         archived: false,
         assignedTo: f.assignedTo || defaultAssigneeId,
@@ -2179,6 +2345,7 @@ export default function NoraHRKanban() {
         description: f.description || "",
         status: newTaskStatus,
         order: Date.now(),
+        startDate: f.startDate || "",
         dueDate: f.dueDate || "",
         archived: false,
         assignedTo: f.assignedTo || defaultAssigneeId,
@@ -2294,6 +2461,9 @@ export default function NoraHRKanban() {
   function resetLocalDemo() {
     if (!confirm("¿Resetear datos locales demo?")) return;
     localStorage.removeItem(LOCAL_TASKS_KEY);
+    Object.keys(localStorage)
+      .filter(key => key.startsWith(`${LOCAL_TASKS_KEY}.`))
+      .forEach(key => localStorage.removeItem(key));
     localStorage.removeItem(LOCAL_COMMENTS_KEY);
     localStorage.removeItem(LOCAL_IT_CONFIG_KEY);
     localStorage.removeItem(LOCAL_LOGS_KEY);
@@ -2422,8 +2592,14 @@ export default function NoraHRKanban() {
             </div>
 
             <div className="hidden h-8 items-center rounded-xl bg-slate-100 p-1 md:flex">
-              <button onClick={() => setViewMode(viewMode === "list" ? "board" : "list")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "list" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
-                <ListFilter className="h-4 w-4" /> {viewMode === "list" ? "Board view" : "Task list"}
+              <button onClick={() => setViewMode("board")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "board" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
+                <LayoutDashboard className="h-4 w-4" /> Kanban
+              </button>
+              <button onClick={() => setViewMode("gantt")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "gantt" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
+                <Calendar className="h-4 w-4" /> Gantt
+              </button>
+              <button onClick={() => setViewMode("list")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "list" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
+                <ListFilter className="h-4 w-4" /> Task list
               </button>
               <button onClick={() => setShowArchived(!showArchived)} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${showArchived ? "bg-amber-50 text-amber-700" : "text-slate-500"}`}>
                 <Archive className="h-4 w-4" /> Archive
@@ -2597,12 +2773,31 @@ export default function NoraHRKanban() {
                 )}
               </div>
             </div>
+          ) : viewMode === "gantt" ? (
+            <GanttView tasks={displayedTasks} onSelect={setDetailT} onAdd={openAddTask} canCreate={appCanCreate} />
           ) : (
-            <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
-              {columns.map(({ status, items }) => (
-                <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
-              ))}
-            </div>
+            <>
+              {tasks.length === 0 ? (
+                <div className="flex min-h-[420px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white text-center shadow-sm">
+                  <LayoutDashboard className="mb-3 h-10 w-10 text-slate-300" />
+                  <h2 className="text-sm font-black text-slate-800">Este board no tiene tareas</h2>
+                  <p className="mt-1 max-w-sm text-xs font-semibold text-slate-400">Crea la primera card para empezar a organizar este kanban.</p>
+                  {appCanCreate && (
+                    <button onClick={() => openAddTask("Pendiente")} className="mt-4 flex h-9 items-center gap-2 rounded-xl bg-cyan-600 px-4 text-xs font-black text-white hover:bg-cyan-700">
+                      <Plus className="h-4 w-4" /> Nueva tarea
+                    </button>
+                  )}
+                </div>
+              ) : displayedTasks.length === 0 ? (
+                <div className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm font-semibold text-slate-400 shadow-sm">No hay tareas con estos filtros.</div>
+              ) : (
+                <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
+                  {columns.map(({ status, items }) => (
+                    <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>
