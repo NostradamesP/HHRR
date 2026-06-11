@@ -289,3 +289,5 @@ Fase 5 - Post-publicacion:
 ==============================
 - Drag and drop ahora usa deteccion por puntero con fallback a interseccion/centro para permitir soltar cards en columnas vacias.
 - Nombre visible actualizado a `Kanban IT Departament` en app, sidebar, board default y metadata HTML.
+- Agregada capa de branding centralizada para mostrar `Kanban IT Departament` aunque boards legacy sigan guardados como Nora/NoraHR en Firebase/localStorage.
+- Monograma visible cambiado de `N` a `IT` en login, header y sidebar.

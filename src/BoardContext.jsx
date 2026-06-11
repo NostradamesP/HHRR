@@ -2,10 +2,11 @@ import { createContext, useContext, useState, useEffect, useRef } from "react";
 import { collection, onSnapshot, addDoc, getDocs, query, where, serverTimestamp, deleteDoc, doc, setDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
+import { APP_NAME } from "./branding";
 
 const BoardContext = createContext(null);
 const LOCAL_BOARDS_KEY = "norahr.local.boards";
-const DEFAULT_LOCAL_BOARD = { id: "local-demo-board", name: "Kanban IT Departament", ownerId: "local-demo-user", members: ["local-demo-user"] };
+const DEFAULT_LOCAL_BOARD = { id: "local-demo-board", name: APP_NAME, ownerId: "local-demo-user", members: ["local-demo-user"] };
 
 function safeGetItem(key) {
   try {
@@ -179,7 +180,7 @@ export function BoardProvider({ children }) {
         } else if (!initialized.current) {
           initialized.current = true;
           addDoc(collection(db, "boards"), {
-            name: "Kanban IT Departament",
+            name: APP_NAME,
             createdBy: user.uid,
             ownerId: user.uid,
             members: [user.uid],

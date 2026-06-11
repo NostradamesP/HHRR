@@ -38,6 +38,7 @@ import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
 import Sidebar from "./Sidebar";
+import { APP_MONOGRAM, APP_NAME, displayBoardName } from "./branding";
 
 class ErrorBoundary extends Component {
   constructor(props) {
@@ -1680,8 +1681,8 @@ function LoginForm() {
     <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa] p-4">
       <div className="w-full max-w-sm rounded-2xl border bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
-          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-red-600 text-lg font-bold text-white">N</span>
-          <h1 className="mt-3 text-lg font-bold text-slate-900">Kanban IT Departament</h1>
+          <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-red-600 text-sm font-bold text-white">{APP_MONOGRAM}</span>
+          <h1 className="mt-3 text-lg font-bold text-slate-900">{APP_NAME}</h1>
           <p className="text-sm text-slate-400">{showReset ? "Restablecer contraseña" : mode === "login" ? "Inicia sesión para continuar" : "Crea tu cuenta"}</p>
         </div>
         {showReset ? (
@@ -1823,7 +1824,7 @@ export default function NoraHRKanban() {
   const appUserData = userData || (isLocalDemo ? { name: "IT Manager", role: "admin", email: "demo@norahr.local" } : null);
   const appIsAdmin = isAdmin || isLocalDemo;
   const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : null);
-  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "Kanban IT Departament" }] : boards);
+  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: APP_NAME }] : boards);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -2531,7 +2532,7 @@ export default function NoraHRKanban() {
 
   const activeBoardName = useMemo(() => {
     const b = appBoards.find(b => b.id === appActiveBoardId);
-    return b ? b.name : "Kanban IT Departament";
+    return b ? displayBoardName(b.name) : APP_NAME;
   }, [appBoards, appActiveBoardId]);
 
   const hasActiveViewFilters =
@@ -2583,7 +2584,7 @@ export default function NoraHRKanban() {
         <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
           <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-3 py-1.5 md:px-3">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600 text-xs font-black text-white shadow-sm">N</span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-red-600 text-[10px] font-black text-white shadow-sm">{APP_MONOGRAM}</span>
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <h1 className="truncate text-sm font-black text-slate-900">{activeBoardName}</h1>
