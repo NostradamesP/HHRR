@@ -308,3 +308,17 @@ Fase 5 - Post-publicacion:
 - Filtros avanzados ahora se despliegan bajo demanda tambien en desktop para reducir ruido visual.
 - Cards compactadas: se removieron selects inline y metadata duplicada; la edicion queda en card detail.
 - Labels demo legacy como `Demo NoraHR` se muestran como `IT Manager` sin cambiar datos guardados.
+
+==============================
+2026-06-11 - Optimizacion Firebase + seguridad
+==============================
+- Firestore rules endurecidas por membresia de board: solo miembros pueden leer `boards/{boardId}` y subcolecciones.
+- Roles separados: admin global administra usuarios; manager/owner/admin operan boards y tareas.
+- Bloqueada la coleccion legacy `/tasks` desde reglas; tareas productivas viven en `boards/{boardId}/tasks`.
+- Auto-registro ya no escanea `users`; nuevos usuarios crean perfil `member` y el admin se gestiona por panel/script seguro.
+- Cliente ya no repara/deduplica/migra boards automaticamente al login; migraciones quedan para tooling admin local.
+- Cliente ya no escanea comentarios por cada tarea; ahora usa `commentsCount` en la task y lo incrementa al comentar.
+- Se removio la auto-asignacion silenciosa de tareas sin responsable al admin actual para evitar writes inesperados.
+- Listado global de usuarios se carga solo para admin; miembros/managers usan su propio perfil y datos del board.
+- Agregado `firebase.json` para desplegar reglas de Firestore de forma controlada cuando se use Firebase CLI.
+- Politica: no subir `service-account.json`; mantener GitHub Pages como hosting actual y budget alert recomendado de USD 10/mes.

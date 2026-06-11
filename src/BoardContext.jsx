@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, addDoc, getDocs, query, where, serverTimestamp, deleteDoc, doc, setDoc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import { collection, onSnapshot, addDoc, getDocs, query, where, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { APP_NAME } from "./branding";
@@ -47,19 +47,6 @@ async function deleteSubcollection(boardId, subcol) {
   }
 }
 
-async function migrateSubcollection(fromId, toId, subcol) {
-  try {
-    const snap = await getDocs(collection(db, "boards", fromId, subcol));
-    if (snap.empty) return;
-    await Promise.allSettled([
-      ...snap.docs.map(d => setDoc(doc(db, "boards", toId, subcol, d.id), d.data())),
-      ...snap.docs.map(d => deleteDoc(doc(db, "boards", fromId, subcol, d.id))),
-    ]);
-  } catch (e) {
-    console.warn(`Error migrating ${subcol} from ${fromId} to ${toId}:`, e);
-  }
-}
-
 export function BoardProvider({ children }) {
   const { user } = useAuth();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
@@ -67,7 +54,6 @@ export function BoardProvider({ children }) {
   const [activeBoardId, setActiveBoardId] = useState(() => safeGetItem("activeBoardId"));
   const [loading, setLoading] = useState(true);
   const initialized = useRef(false);
-  const deduped = useRef(false);
   const boardsRef = useRef(boards);
   boardsRef.current = boards;
 
@@ -93,25 +79,6 @@ export function BoardProvider({ children }) {
     }
 
     let cancelled = false;
-    (async () => {
-      try {
-        const [createdSnap, ownedSnap] = await Promise.all([
-          getDocs(query(collection(db, "boards"), where("createdBy", "==", user.uid))),
-          getDocs(query(collection(db, "boards"), where("ownerId", "==", user.uid))),
-        ]);
-        const legacy = new Map();
-        [...createdSnap.docs, ...ownedSnap.docs].forEach(d => legacy.set(d.id, { id: d.id, ...d.data() }));
-        await Promise.allSettled([...legacy.values()].map(b => {
-          if (Array.isArray(b.members) && b.members.includes(user.uid) && b.ownerId) return Promise.resolve();
-          return updateDoc(doc(db, "boards", b.id), {
-            members: arrayUnion(user.uid),
-            ownerId: b.ownerId || b.createdBy || user.uid,
-          });
-        }));
-      } catch (e) {
-        console.error("Board membership repair error:", e);
-      }
-    })();
 
     const unsub = onSnapshot(
       query(collection(db, "boards"), where("members", "array-contains", user.uid)),
@@ -126,12 +93,6 @@ export function BoardProvider({ children }) {
           });
         setBoards(list);
 
-        list.forEach(b => {
-          if (!b.members && b.createdBy) {
-            updateDoc(doc(db, "boards", b.id), { members: [b.createdBy], ownerId: b.createdBy }).catch(console.error);
-          }
-        });
-
         if (list.length > 0) {
           setActiveBoardId(prev => {
             if (prev && list.find(b => b.id === prev)) return prev;
@@ -141,42 +102,6 @@ export function BoardProvider({ children }) {
             return list[0].id;
           });
 
-          const boardsByName = {};
-          list.forEach(b => {
-            if (!boardsByName[b.name]) boardsByName[b.name] = [];
-            boardsByName[b.name].push(b);
-          });
-
-          if (!deduped.current) {
-            deduped.current = true;
-            Object.values(boardsByName).forEach(async (dups) => {
-            if (dups.length <= 1) return;
-            const main = dups[0];
-            const extras = dups.slice(1);
-            for (const extra of extras) {
-              try {
-                await Promise.all([
-                  migrateSubcollection(extra.id, main.id, "tasks"),
-                  migrateSubcollection(extra.id, main.id, "logs"),
-                  migrateSubcollection(extra.id, main.id, "messages"),
-                ]);
-                const tasksSnap = await getDocs(collection(db, "boards", extra.id, "tasks"));
-                await Promise.allSettled(
-                  tasksSnap.docs.map(async (taskDoc) => {
-                    await migrateSubcollection(
-                      `boards/${extra.id}/tasks/${taskDoc.id}`,
-                      `boards/${main.id}/tasks/${taskDoc.id}`,
-                      "comments"
-                    );
-                  })
-                );
-                await deleteDoc(doc(db, "boards", extra.id));
-              } catch (e) {
-                console.error("Error deduplicating board:", extra.id, e);
-              }
-            }
-          });
-          }
         } else if (!initialized.current) {
           initialized.current = true;
           addDoc(collection(db, "boards"), {

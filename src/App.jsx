@@ -2,7 +2,7 @@ import React, { Component, useMemo, useState, useEffect, useRef, useCallback } f
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, DragOverlay, pointerWithin, rectIntersection } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, increment } from "firebase/firestore";
 import {
   Archive,
   BarChart3,
@@ -490,6 +490,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
         {(task.urgency === "Crítica" || task.urgency === "Alta") && <CardBadge icon={Flame} className={urgencyTone}>Urg. {task.urgency}</CardBadge>}
         {task.slaHours && <CardBadge icon={Clock3} className={slaTone}>{task.slaHours}h SLA</CardBadge>}
         {checklist.total > 0 && <CardBadge icon={CheckCircle2} className="border-slate-200 bg-slate-50 text-slate-600">{checklist.done}/{checklist.total}</CardBadge>}
+        {Number(task.commentsCount || 0) > 0 && <CardBadge icon={MessageSquare} className="border-slate-200 bg-slate-50 text-slate-600">{task.commentsCount}</CardBadge>}
         {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         <div className="ml-auto flex shrink-0 items-center">
           {task.assignedName ? (
@@ -1205,6 +1206,7 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
       const next = { ...all, [task.id]: [...(all[task.id] || []), nextComment] };
       writeLocalJSON(LOCAL_COMMENTS_KEY, next);
       setComments(next[task.id]);
+      onTaskPatch?.(task.id, { commentsCount: next[task.id].length });
       setCommentText("");
       return;
     }
@@ -1214,6 +1216,10 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
         userId: user.uid,
         userName: userData?.name || user.email,
         createdAt: serverTimestamp(),
+      });
+      await updateDoc(doc(db, "boards", activeBoardId, "tasks", task.id), {
+        commentsCount: increment(1),
+        updatedAt: serverTimestamp(),
       });
       setCommentText("");
     } catch (err) {
@@ -2065,6 +2071,7 @@ export default function NoraHRKanban() {
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
   const appUserData = userData || (isLocalDemo ? { name: "IT Manager", role: "admin", email: "demo@norahr.local" } : null);
+  const appRole = appUserData?.role || "member";
   const appIsAdmin = isAdmin || isLocalDemo;
   const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : null);
   const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: APP_NAME }] : boards);
@@ -2098,15 +2105,13 @@ export default function NoraHRKanban() {
   const [showItConfig, setShowItConfig] = useState(false);
   const [itConfig, setItConfig] = useState(() => readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig));
   const [activeId, setActiveId] = useState(null);
-  const [commentTaskIds, setCommentTaskIds] = useState([]);
   const [toast, setToast] = useState(null);
   const showToast = useCallback((msg) => setToast(msg), []);
   const [deletingId, setDeletingId] = useState(null);
   const appUserLevel = isLocalDemo ? "manager" : (itConfig.jobTitleHierarchy || {})[appUserData?.jobTitle || ""] || "viewer";
-  const appCanCreate = appIsAdmin || appUserLevel === "manager" || appUserLevel === "admin";
+  const appCanCreate = appIsAdmin || appRole === "manager" || appUserLevel === "manager" || appUserLevel === "admin";
   const appCanEdit = appCanCreate || appUserLevel === "editor";
   const activeTask = useMemo(() => tasks.find(t => t.id === activeId), [activeId, tasks]);
-  const migrated = useRef(false);
   const boardsRef = useRef(appBoards);
   const tasksRef = useRef(tasks);
   tasksRef.current = tasks;
@@ -2167,26 +2172,12 @@ export default function NoraHRKanban() {
           )
         );
       }
-      const adminName = userData?.name || user.email;
-      const unassigned = appIsAdmin ? ts.filter(t => !t.assignedTo && !t.assignedName) : [];
-      if (unassigned.length > 0) {
-        Promise.allSettled(
-          unassigned.map(t =>
-            updateDoc(doc(db, "boards", activeBoardId, "tasks", t.id), {
-              assignedTo: user.uid,
-              assignedName: adminName,
-              createdBy: t.createdBy || user.uid,
-              updatedAt: serverTimestamp(),
-            })
-          )
-        );
-      }
     }, (err) => {
       console.error("Tasks listener error:", err);
       showToast("No se pudieron cargar las tareas del board.");
     });
     return unsub;
-  }, [user, userData, appIsAdmin, activeBoardId, isLocalDemo, showToast, itConfig]);
+  }, [user, activeBoardId, isLocalDemo, showToast, itConfig]);
 
   useEffect(() => {
     if (!isLocalDemo || !localLoaded.current) return;
@@ -2207,7 +2198,14 @@ export default function NoraHRKanban() {
       setUsers([]);
       return;
     }
-    if (!user) return;
+    if (!user) {
+      setUsers([]);
+      return;
+    }
+    if (!appIsAdmin) {
+      setUsers(userData ? [{ id: user.uid, ...userData }] : []);
+      return;
+    }
     const unsub = onSnapshot(
       query(collection(db, "users"), limit(200)),
       (snap) => {
@@ -2218,57 +2216,7 @@ export default function NoraHRKanban() {
       }
     );
     return unsub;
-  }, [user, isLocalDemo]);
-
-  useEffect(() => {
-    if (isLocalDemo) {
-      const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
-      setCommentTaskIds(Object.entries(all).filter(([, comments]) => Array.isArray(comments) && comments.length > 0).map(([taskId]) => taskId));
-      return;
-    }
-    if (!user || !activeBoardId || tasks.length === 0) {
-      setCommentTaskIds([]);
-      return;
-    }
-    let cancelled = false;
-    (async () => {
-      try {
-        const ids = [];
-        await Promise.all(tasks.map(async (task) => {
-          const snap = await getDocs(query(collection(db, "boards", activeBoardId, "tasks", task.id, "comments"), limit(1)));
-          if (!snap.empty) ids.push(task.id);
-        }));
-        if (!cancelled) setCommentTaskIds(ids);
-      } catch (e) {
-        console.error("Error loading task comment filters:", e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [tasks, user, activeBoardId, isLocalDemo]);
-
-  useEffect(() => {
-    if (isLocalDemo || !user || !appIsAdmin || !activeBoardId || migrated.current) return;
-    (async () => {
-      try {
-        const snap = await getDocs(collection(db, "tasks"));
-        if (snap.empty) { migrated.current = true; return; }
-        const writes = snap.docs.map((d, idx) =>
-          setDoc(doc(db, "boards", activeBoardId, "tasks", d.id), {
-            ...d.data(),
-            order: d.data().order || Date.now() + idx,
-            dueDate: d.data().dueDate || "",
-            archived: d.data().archived || false,
-            updatedAt: serverTimestamp(),
-          })
-        );
-        await Promise.all(writes);
-        await Promise.all(snap.docs.map(d => deleteDoc(doc(db, "tasks", d.id))));
-        migrated.current = true;
-      } catch (e) {
-        console.error("Migration failed:", e);
-      }
-    })();
-  }, [user, appIsAdmin, activeBoardId, isLocalDemo]);
+  }, [user, userData, appIsAdmin, isLocalDemo]);
 
   const userMap = useMemo(() => {
     const m = {};
@@ -2276,14 +2224,21 @@ export default function NoraHRKanban() {
     return m;
   }, [users]);
 
+  const localCommentTaskIds = useMemo(() => {
+    if (!isLocalDemo) return new Set();
+    const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
+    return new Set(Object.entries(all)
+      .filter(([, comments]) => Array.isArray(comments) && comments.length > 0)
+      .map(([taskId]) => taskId));
+  }, [isLocalDemo, tasks]);
+
   const displayedTasks = useMemo(() => {
     let ts = tasks.filter(t => showArchived ? t.archived : !t.archived);
     if (myWorkOnly) {
       ts = ts.filter(t => t.assignedTo === appUser?.uid || t.assignedName === appUserData?.name);
     }
     if (commentsOnly) {
-      const ids = new Set(commentTaskIds);
-      ts = ts.filter(t => ids.has(t.id));
+      ts = ts.filter(t => Number(t.commentsCount || 0) > 0 || localCommentTaskIds.has(String(t.id)));
     }
     if (systemFilter !== "Todos") ts = ts.filter(t => t.system === systemFilter);
     if (typeFilter !== "Todos") ts = ts.filter(t => t.ticketType === typeFilter);
@@ -2307,7 +2262,7 @@ export default function NoraHRKanban() {
       return (a.order || 0) - (b.order || 0);
     });
     return filterTasks(ts, searchQuery, mod, prio, phase);
-  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, commentsOnly, commentTaskIds, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter, opsFilter]);
+  }, [tasks, searchQuery, mod, prio, phase, showArchived, overdueOnly, myWorkOnly, commentsOnly, localCommentTaskIds, appUser?.uid, appUserData?.name, systemFilter, typeFilter, responsibleFilter, slaFilter, opsFilter]);
 
   const operationalMetrics = useMemo(() => {
     const active = tasks.filter(t => !t.archived);
@@ -2419,7 +2374,7 @@ export default function NoraHRKanban() {
 
   async function handleDragEnd(e) {
     const { active, over } = e;
-    if (!over || !appIsAdmin) {
+    if (!over || !appCanEdit) {
       setActiveId(null);
       return;
     }
@@ -2576,6 +2531,7 @@ export default function NoraHRKanban() {
         urgency: f.urgency || "",
         slaHours: f.slaHours || "",
         checklist: f.checklist || makeChecklist(f.title),
+        commentsCount: 0,
         operationalState: f.operationalState || "normal",
         blockedReason: f.blockedReason || "",
         id: newId,
@@ -2610,6 +2566,7 @@ export default function NoraHRKanban() {
         urgency: f.urgency || "",
         slaHours: f.slaHours || "",
         checklist: f.checklist || makeChecklist(f.title),
+        commentsCount: 0,
         operationalState: f.operationalState || "normal",
         blockedReason: f.blockedReason || "",
         createdBy: user.uid,
@@ -3088,7 +3045,7 @@ export default function NoraHRKanban() {
               ) : (
                 <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
                   {columns.map(({ status, items }) => (
-                    <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appIsAdmin} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
+                    <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appCanEdit} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
                   ))}
                 </div>
               )}
@@ -3107,7 +3064,7 @@ export default function NoraHRKanban() {
 
       <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
         <ErrorBoundary key={detailT?.id}>
-          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appIsAdmin} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} deletingId={deletingId} onCatalogValue={addCatalogValue} moduleOptions={moduleOptions} phaseOptions={phaseOptions} statusOptions={statusOptions} />}
+          {detailT && <TaskDetail task={detailT} onDelete={deleteTask} onClose={() => setDetailT(null)} onStatus={updateStatus} onArchive={archiveTask} isAdmin={appCanEdit} activeBoardId={isLocalDemo ? null : activeBoardId} users={users} onTaskPatch={patchTask} itConfig={itConfig} isLocal={isLocalDemo} deletingId={deletingId} onCatalogValue={addCatalogValue} moduleOptions={moduleOptions} phaseOptions={phaseOptions} statusOptions={statusOptions} />}
         </ErrorBoundary>
       </Modal>
 

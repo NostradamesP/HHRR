@@ -5,7 +5,7 @@ import {
   createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
-import { doc, getDoc, setDoc, collection, getDocs } from "firebase/firestore";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { auth, db } from "./firebase";
 
 const AuthContext = createContext(null);
@@ -42,14 +42,11 @@ export function AuthProvider({ children }) {
           if (snap.exists()) {
             setUserData(snap.data());
           } else {
-            const usersSnap = await getDocs(collection(db, "users"));
-            if (!mounted) return;
-            const role = usersSnap.empty ? "admin" : "member";
             const data = {
               email: firebaseUser.email,
               name: firebaseUser.email.split("@")[0],
-              role,
-              jobTitle: usersSnap.empty ? "IT Project Manager" : "Soporte Técnico",
+              role: "member",
+              jobTitle: "Soporte Técnico",
               createdAt: new Date().toISOString(),
             };
             await setDoc(doc(db, "users", currentUid), data);
@@ -78,13 +75,11 @@ export function AuthProvider({ children }) {
 
   async function signup(email, password, name) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const usersSnap = await getDocs(collection(db, "users"));
-    const role = usersSnap.empty ? "admin" : "member";
     const data = {
       email,
       name: name || email.split("@")[0],
-      role,
-      jobTitle: usersSnap.empty ? "IT Project Manager" : "Soporte Técnico",
+      role: "member",
+      jobTitle: "Soporte Técnico",
       createdAt: new Date().toISOString(),
     };
     await setDoc(doc(db, "users", cred.user.uid), data);
