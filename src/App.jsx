@@ -5,15 +5,16 @@ import { CSS } from "@dnd-kit/utilities";
 import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
 import {
   Archive,
+  BarChart3,
   Calendar,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
   Circle,
   Clock3,
+  Download,
   Flag,
   Flame,
-  Gauge,
   LayoutDashboard,
   ListFilter,
   Loader2,
@@ -21,6 +22,7 @@ import {
   MessageSquare,
   MoreVertical,
   Plus,
+  Printer,
   RefreshCw,
   Save,
   Search,
@@ -248,6 +250,31 @@ function addDays(date, days) {
   return next;
 }
 
+function startOfMonth(date) {
+  const next = new Date(date);
+  next.setDate(1);
+  next.setHours(0, 0, 0, 0);
+  return next;
+}
+
+function addMonths(date, months) {
+  const next = new Date(date);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function endOfMonth(date) {
+  const next = startOfMonth(addMonths(date, 1));
+  return addDays(next, -1);
+}
+
+function dateInputValue(date) {
+  if (!date) return "";
+  const d = new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().slice(0, 10);
+}
+
 function diffDays(a, b) {
   const start = new Date(a);
   const end = new Date(b);
@@ -260,6 +287,49 @@ function shortDate(date) {
   return date.toLocaleDateString("es-DO", { day: "numeric", month: "short" });
 }
 
+function isUrgentTask(task) {
+  return task.urgency === "Crítica" || task.urgency === "Alta" || task.priority === "Alta";
+}
+
+function taskBarTone(task) {
+  if (isTaskOverdue(task)) return "bg-red-500";
+  if (getOperationalState(task) === "blocked") return "bg-rose-500";
+  if (task.status === "Hecho") return "bg-emerald-500";
+  if (isUrgentTask(task)) return "bg-amber-500";
+  return "bg-cyan-600";
+}
+
+function groupCounts(tasks, getter, fallback = "Sin definir") {
+  const counts = new Map();
+  tasks.forEach(task => {
+    const key = cleanValue(getter(task)) || fallback;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return [...counts.entries()]
+    .map(([label, value]) => ({ label, value }))
+    .sort((a, b) => b.value - a.value || a.label.localeCompare(b.label));
+}
+
+function reportSummary(tasks) {
+  const checklist = tasks.reduce((acc, task) => {
+    const progress = checklistProgress(task);
+    acc.total += progress.total;
+    acc.done += progress.done;
+    return acc;
+  }, { total: 0, done: 0 });
+  return {
+    total: tasks.length,
+    overdue: tasks.filter(isTaskOverdue).length,
+    blocked: tasks.filter(task => getOperationalState(task) === "blocked").length,
+    unassigned: tasks.filter(task => !task.assignedTo && !task.assignedName).length,
+    urgent: tasks.filter(isUrgentTask).length,
+    completed: tasks.filter(task => task.status === "Hecho").length,
+    checklistDone: checklist.done,
+    checklistTotal: checklist.total,
+    checklistPct: checklist.total ? Math.round((checklist.done / checklist.total) * 100) : 0,
+  };
+}
+
 function kanbanCollisionDetection(args) {
   const pointerHits = pointerWithin(args);
   if (pointerHits.length > 0) return pointerHits;
@@ -270,6 +340,12 @@ function kanbanCollisionDetection(args) {
 
 function cleanValue(value) {
   return String(value ?? "").trim();
+}
+
+function displayPersonName(name) {
+  const clean = cleanValue(name);
+  if (!clean) return "";
+  return clean === "Demo NoraHR" ? "IT Manager" : clean;
 }
 
 function uniqueOptions(values) {
@@ -345,9 +421,10 @@ const statusMeta = {
 
 function Avatar({ name, size = "sm" }) {
   const dim = size === "lg" ? "h-11 w-11 text-base" : "h-7 w-7 text-xs";
+  const visibleName = displayPersonName(name);
   return (
     <span className={`inline-flex ${dim} shrink-0 items-center justify-center rounded-full bg-cyan-600 font-bold text-white shadow-sm`}>
-      {(name || "?").charAt(0).toUpperCase()}
+      {(visibleName || "?").charAt(0).toUpperCase()}
     </span>
   );
 }
@@ -377,7 +454,6 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   const opMeta = operationalStates[opKey] || { ...operationalStates.normal, label: opKey || "Normal" };
   const OpIcon = opMeta.icon;
   const slaTone = task.slaHours ? "border-cyan-100 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-slate-50 text-slate-400";
-  const impactTone = task.impact === "Crítico" || task.impact === "Alto" ? "border-red-100 bg-red-50 text-red-700" : "border-slate-200 bg-slate-50 text-slate-600";
   const urgencyTone = task.urgency === "Crítica" || task.urgency === "Alta" ? "border-amber-100 bg-amber-50 text-amber-700" : "border-slate-200 bg-slate-50 text-slate-600";
   const badgeBase = "inline-flex h-[22px] max-w-[132px] items-center gap-1 rounded-md border px-1.5 text-[10px] font-semibold leading-none";
 
@@ -403,43 +479,17 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
       <div className="flex flex-wrap gap-1">
         <CardBadge icon={Server} className="border-cyan-100 bg-cyan-50 text-cyan-700">{task.system || "Sin sistema"}</CardBadge>
         <CardBadge className="border-slate-200 bg-white text-slate-700">{task.ticketType || "Sin tipo"}</CardBadge>
-        <div className="min-w-0">
-          {isAdmin ? (
-            <select value={task.module} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { module: e.target.value }); }}
-              onPointerDown={e => e.stopPropagation()}
-              onClick={e => e.stopPropagation()}
-              className={`h-[22px] max-w-[116px] rounded-md border px-1.5 text-[10px] font-semibold outline-none ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
-              {modules.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <span className={`${badgeBase} ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
-              <Tag className="h-3 w-3" />{task.module}
-            </span>
-          )}
-        </div>
-        <div className="min-w-0">
-          {isAdmin ? (
-            <select value={task.phase} onChange={e => { e.stopPropagation(); onTaskPatch?.(task.id, { phase: e.target.value }); }}
-              onPointerDown={e => e.stopPropagation()}
-              onClick={e => e.stopPropagation()}
-              className={`h-[22px] rounded-md border px-1.5 text-[10px] font-semibold outline-none ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
-              {Object.entries(phaseMap).map(([k]) => <option key={k} value={k}>{k}</option>)}
-            </select>
-          ) : (
-            <span className={`${badgeBase} ${phaseColors[task.phase] || "bg-slate-100 text-slate-500"}`}>
-              {task.phase}
-            </span>
-          )}
-        </div>
+        <span className={`${badgeBase} ${modColors[task.module] || "bg-slate-100 text-slate-600"} border-transparent`}>
+          <Tag className="h-3 w-3" />{task.module || "Sin módulo"}
+        </span>
         <CardBadge icon={PriorityIcon} className={meta.tone}>{task.priority || "Prioridad"}</CardBadge>
       </div>
 
       <div className="flex flex-wrap items-center gap-1 border-t border-slate-100 pt-1.5">
-        <CardBadge icon={OpIcon} className={opMeta.tone}>{opMeta.label}</CardBadge>
-        <CardBadge icon={Gauge} className={impactTone}>Impacto: {task.impact || "N/D"}</CardBadge>
-        <CardBadge icon={Flame} className={urgencyTone}>Urgencia: {task.urgency || "N/D"}</CardBadge>
-        <CardBadge icon={Clock3} className={slaTone}>{task.slaHours ? `${task.slaHours}h SLA` : "Sin SLA"}</CardBadge>
-        <CardBadge icon={CheckCircle2} className="border-slate-200 bg-slate-50 text-slate-600">{checklist.done}/{checklist.total}</CardBadge>
+        {opKey !== "normal" && <CardBadge icon={OpIcon} className={opMeta.tone}>{opMeta.label}</CardBadge>}
+        {(task.urgency === "Crítica" || task.urgency === "Alta") && <CardBadge icon={Flame} className={urgencyTone}>Urg. {task.urgency}</CardBadge>}
+        {task.slaHours && <CardBadge icon={Clock3} className={slaTone}>{task.slaHours}h SLA</CardBadge>}
+        {checklist.total > 0 && <CardBadge icon={CheckCircle2} className="border-slate-200 bg-slate-50 text-slate-600">{checklist.done}/{checklist.total}</CardBadge>}
         {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}
         <div className="ml-auto flex shrink-0 items-center">
           {task.assignedName ? (
@@ -571,10 +621,31 @@ function DueDateBadge({ dueDate }) {
   return <span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${color}`}>{isOverdue ? <Flame className="h-3 w-3" /> : <Calendar className="h-3 w-3" />}{label}</span>;
 }
 
-function GanttView({ tasks, onSelect, onAdd, canCreate }) {
-  const dayWidth = 28;
-  const rowHeight = 42;
-  const datedTasks = tasks
+function GanttView({ tasks, onSelect, onAdd, canCreate, canEdit, onTaskPatch }) {
+  const dayWidth = 30;
+  const rowHeight = 48;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const [rangeMode, setRangeMode] = useState("2m");
+  const [rangeAnchor, setRangeAnchor] = useState(startOfMonth(today));
+  const [quickTaskId, setQuickTaskId] = useState(null);
+
+  const range = useMemo(() => {
+    const start = startOfMonth(rangeAnchor);
+    if (rangeMode === "month") return { start, end: endOfMonth(start) };
+    if (rangeMode === "quarter") return { start, end: endOfMonth(addMonths(start, 2)) };
+    return { start, end: endOfMonth(addMonths(start, 1)) };
+  }, [rangeAnchor, rangeMode]);
+
+  const sortedTasks = useMemo(() => [...tasks].sort((a, b) => {
+    const rank = operationalRank(a) - operationalRank(b);
+    if (rank !== 0) return rank;
+    const aDate = parseTaskDate(a.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+    const bDate = parseTaskDate(b.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER;
+    return aDate - bDate || String(a.title).localeCompare(String(b.title));
+  }), [tasks]);
+
+  const datedTasks = sortedTasks
     .map(task => {
       const due = parseTaskDate(task.dueDate);
       if (!due) return null;
@@ -584,86 +655,134 @@ function GanttView({ tasks, onSelect, onAdd, canCreate }) {
       return { task, start, end };
     })
     .filter(Boolean);
-  const undatedTasks = tasks.filter(task => !parseTaskDate(task.dueDate));
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  const range = useMemo(() => {
-    if (datedTasks.length === 0) {
-      const start = addDays(today, -7);
-      return { start, end: addDays(today, 35) };
-    }
-    const minStart = datedTasks.reduce((min, item) => item.start < min ? item.start : min, datedTasks[0].start);
-    const maxEnd = datedTasks.reduce((max, item) => item.end > max ? item.end : max, datedTasks[0].end);
-    return { start: addDays(minStart, -7), end: addDays(maxEnd, 14) };
-  }, [tasks]);
-
+  const undatedTasks = sortedTasks.filter(task => !parseTaskDate(task.dueDate));
+  const quickTask = sortedTasks.find(task => task.id === quickTaskId) || null;
+  const visibleRows = [...datedTasks.map(item => item.task), ...undatedTasks];
   const days = Math.max(diffDays(range.start, range.end) + 1, 21);
   const width = days * dayWidth;
   const todayOffset = diffDays(range.start, today) * dayWidth;
   const monthLabels = [];
+
   for (let cursor = new Date(range.start); cursor <= range.end; cursor = addDays(cursor, 1)) {
     if (cursor.getDate() === 1 || monthLabels.length === 0) {
       monthLabels.push({
-        label: cursor.toLocaleDateString("es-DO", { month: "short", year: "2-digit" }),
+        label: cursor.toLocaleDateString("es-DO", { month: "short", year: "numeric" }),
         left: diffDays(range.start, cursor) * dayWidth,
       });
     }
   }
 
+  function shiftRange(direction) {
+    const step = rangeMode === "quarter" ? 3 : rangeMode === "month" ? 1 : 2;
+    setRangeAnchor(prev => startOfMonth(addMonths(prev, direction * step)));
+  }
+
+  function patchDate(task, patch) {
+    onTaskPatch?.(task.id, patch);
+    setQuickTaskId(task.id);
+  }
+
+  function assignToday(task) {
+    const date = dateInputValue(today);
+    patchDate(task, { startDate: date, dueDate: date });
+  }
+
   return (
     <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+      <div className="flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h2 className="text-sm font-black text-slate-900">Gantt</h2>
-          <p className="text-xs font-semibold text-slate-400">{datedTasks.length} con fecha · {undatedTasks.length} sin fecha</p>
+          <p className="text-xs font-semibold text-slate-400">{datedTasks.length} con fecha · {undatedTasks.length} sin fecha · {shortDate(range.start)} - {shortDate(range.end)}</p>
         </div>
-        {canCreate && (
-          <button onClick={() => onAdd?.("Pendiente")} className="flex h-8 items-center gap-1.5 rounded-lg bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700">
-            <Plus className="h-3.5 w-3.5" /> Nueva tarea
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-2">
+          <button onClick={() => setRangeAnchor(startOfMonth(today))} className="h-8 rounded-lg border border-slate-200 bg-white px-3 text-xs font-black text-slate-600 hover:bg-slate-100">Hoy</button>
+          <div className="flex h-8 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            {[["month", "Mes"], ["2m", "2 meses"], ["quarter", "Trimestre"]].map(([key, label]) => (
+              <button key={key} onClick={() => setRangeMode(key)} className={`px-3 text-xs font-black ${rangeMode === key ? "bg-cyan-600 text-white" : "text-slate-500 hover:bg-slate-50"}`}>{label}</button>
+            ))}
+          </div>
+          <div className="flex h-8 overflow-hidden rounded-lg border border-slate-200 bg-white">
+            <button onClick={() => shiftRange(-1)} className="px-2 text-slate-500 hover:bg-slate-50"><ChevronRight className="h-4 w-4 rotate-180" /></button>
+            <button onClick={() => shiftRange(1)} className="px-2 text-slate-500 hover:bg-slate-50"><ChevronRight className="h-4 w-4" /></button>
+          </div>
+          {canCreate && (
+            <button onClick={() => onAdd?.("Pendiente")} className="flex h-8 items-center gap-1.5 rounded-lg bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700">
+              <Plus className="h-3.5 w-3.5" /> Nueva tarea
+            </button>
+          )}
+        </div>
       </div>
-      <div className="grid min-h-[520px] grid-cols-[300px_1fr] overflow-hidden">
+
+      {quickTask && (
+        <div className="border-b border-cyan-100 bg-cyan-50/70 px-4 py-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-black text-slate-900">{quickTask.title}</p>
+              <p className="text-xs font-semibold text-slate-500">{quickTask.system || "Sin sistema"} · {displayPersonName(quickTask.assignedName) || "Sin asignar"} · {quickTask.slaHours ? `${quickTask.slaHours}h SLA` : "Sin SLA"}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input disabled={!canEdit} type="date" value={quickTask.startDate || ""} onChange={e => patchDate(quickTask, { startDate: e.target.value })} className="h-8 rounded-lg border border-cyan-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" />
+              <input disabled={!canEdit} type="date" value={quickTask.dueDate || ""} onChange={e => patchDate(quickTask, { dueDate: e.target.value })} className="h-8 rounded-lg border border-cyan-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" />
+              <input disabled={!canEdit} type="number" min="1" value={quickTask.slaHours || ""} onChange={e => patchDate(quickTask, { slaHours: Number(e.target.value) || "" })} placeholder="SLA" className="h-8 w-20 rounded-lg border border-cyan-200 bg-white px-2 text-xs font-bold text-slate-700 disabled:bg-slate-100" />
+              <button onClick={() => onSelect(quickTask)} className="h-8 rounded-lg bg-slate-900 px-3 text-xs font-black text-white hover:bg-slate-800">Abrir card</button>
+              <button onClick={() => setQuickTaskId(null)} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white"><X className="h-4 w-4" /></button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid min-h-[560px] grid-cols-[320px_1fr] overflow-hidden">
         <div className="border-r border-slate-200 bg-white">
-          <div className="flex h-[64px] items-end border-b border-slate-200 px-3 pb-2 text-[11px] font-black uppercase text-slate-400">
+          <div className="sticky top-0 z-20 flex h-[72px] items-end border-b border-slate-200 bg-white px-3 pb-2 text-[11px] font-black uppercase text-slate-400">
             Tareas
           </div>
           <div>
-            {datedTasks.map(({ task }) => (
-              <button key={task.id} onClick={() => onSelect(task)} className="flex h-[42px] w-full items-center gap-2 border-b border-slate-100 px-3 text-left hover:bg-slate-50">
-                <Avatar name={task.assignedName || "Sin asignar"} size="sm" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-black text-slate-800">{task.title}</span>
-                  <span className="block truncate text-[10px] font-semibold text-slate-400">{task.system || "Sin sistema"} · {task.status}</span>
-                </span>
-              </button>
-            ))}
+            {datedTasks.map(({ task }) => {
+              const op = operationalStates[getOperationalState(task)] || operationalStates.normal;
+              const Op = op.icon;
+              return (
+                <button key={task.id} onClick={() => setQuickTaskId(task.id)} className="flex h-12 w-full items-center gap-2 border-b border-slate-100 px-3 text-left hover:bg-slate-50">
+                  <Avatar name={task.assignedName || "Sin asignar"} size="sm" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-xs font-black text-slate-800">{task.title}</span>
+                    <span className="mt-0.5 flex items-center gap-1 truncate text-[10px] font-semibold text-slate-400">
+                      <Op className="h-3 w-3" /> {task.system || "Sin sistema"} · {task.slaHours ? `${task.slaHours}h` : "Sin SLA"}
+                    </span>
+                  </span>
+                  {task.dueDate && <span className="shrink-0 text-[10px] font-bold text-slate-400">{shortDate(parseTaskDate(task.dueDate))}</span>}
+                </button>
+              );
+            })}
+            {undatedTasks.length > 0 && (
+              <div className="border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-black uppercase text-slate-400">Sin fecha</div>
+            )}
             {undatedTasks.map(task => (
-              <button key={task.id} onClick={() => onSelect(task)} className="flex h-[42px] w-full items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3 text-left hover:bg-slate-100">
+              <div key={task.id} className="flex h-12 items-center gap-2 border-b border-slate-100 bg-slate-50/70 px-3">
                 <Calendar className="h-4 w-4 shrink-0 text-slate-300" />
-                <span className="min-w-0 flex-1">
+                <button onClick={() => setQuickTaskId(task.id)} className="min-w-0 flex-1 text-left">
                   <span className="block truncate text-xs font-bold text-slate-600">{task.title}</span>
-                  <span className="block text-[10px] font-semibold text-slate-400">Sin fecha</span>
-                </span>
-              </button>
+                  <span className="block text-[10px] font-semibold text-slate-400">{displayPersonName(task.assignedName) || "Sin asignar"}</span>
+                </button>
+                {canEdit && <button onClick={() => assignToday(task)} className="rounded-md bg-white px-2 py-1 text-[10px] font-black text-cyan-700 shadow-sm hover:bg-cyan-50">Hoy</button>}
+              </div>
             ))}
             {tasks.length === 0 && (
               <div className="px-4 py-10 text-center text-sm font-semibold text-slate-400">Este board no tiene tareas.</div>
             )}
           </div>
         </div>
+
         <div className="overflow-x-auto">
           <div className="relative" style={{ width }}>
-            <div className="sticky top-0 z-10 h-[64px] border-b border-slate-200 bg-white">
-              <div className="relative h-8 border-b border-slate-100">
+            <div className="sticky top-0 z-10 h-[72px] border-b border-slate-200 bg-white">
+              <div className="relative h-9 border-b border-slate-100">
                 {monthLabels.map((m, idx) => (
                   <span key={`${m.label}-${idx}`} className="absolute top-2 text-[11px] font-black uppercase text-slate-500" style={{ left: m.left + 8 }}>
                     {m.label}
                   </span>
                 ))}
               </div>
-              <div className="relative h-8">
+              <div className="relative h-9">
                 {Array.from({ length: days }).map((_, idx) => {
                   const date = addDays(range.start, idx);
                   const isWeek = date.getDay() === 1 || idx === 0;
@@ -675,32 +794,34 @@ function GanttView({ tasks, onSelect, onAdd, canCreate }) {
                 })}
               </div>
             </div>
-            <div className="relative" style={{ height: Math.max((datedTasks.length + undatedTasks.length) * rowHeight, 420) }}>
-              {Array.from({ length: days }).map((_, idx) => (
-                <span key={idx} className={`absolute top-0 h-full border-l ${idx % 7 === 0 ? "border-slate-200" : "border-slate-100"}`} style={{ left: idx * dayWidth }} />
-              ))}
+            <div className="relative" style={{ height: Math.max(visibleRows.length * rowHeight, 440) }}>
+              {Array.from({ length: days }).map((_, idx) => {
+                const date = addDays(range.start, idx);
+                const weekend = date.getDay() === 0 || date.getDay() === 6;
+                return (
+                  <span key={idx} className={`absolute top-0 h-full border-l ${idx % 7 === 0 ? "border-slate-200" : "border-slate-100"} ${weekend ? "bg-slate-50/80" : ""}`} style={{ left: idx * dayWidth, width: dayWidth }} />
+                );
+              })}
               {todayOffset >= 0 && todayOffset <= width && (
-                <span className="absolute top-0 z-10 h-full border-l-2 border-red-500/70" style={{ left: todayOffset }}>
-                  <span className="ml-1 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white">Hoy</span>
+                <span className="absolute top-0 z-10 h-full border-l-2 border-red-500" style={{ left: todayOffset }}>
+                  <span className="ml-1 rounded bg-red-500 px-1.5 py-0.5 text-[10px] font-black text-white shadow">Hoy</span>
                 </span>
               )}
               {datedTasks.map(({ task, start, end }, idx) => {
                 const left = diffDays(range.start, start) * dayWidth;
-                const barWidth = Math.max((diffDays(start, end) + 1) * dayWidth, 18);
-                const meta = priorityMeta[task.priority] || priorityMeta.Media;
-                const blocked = getOperationalState(task) === "blocked";
-                const overdue = isTaskOverdue(task);
-                const barColor = blocked ? "bg-rose-500" : overdue ? "bg-red-500" : task.status === "Hecho" ? "bg-emerald-500" : "bg-cyan-600";
+                const barWidth = Math.max((diffDays(start, end) + 1) * dayWidth, 20);
+                const visible = left + barWidth >= 0 && left <= width;
+                if (!visible) return null;
                 return (
                   <button
                     key={task.id}
-                    onClick={() => onSelect(task)}
+                    onClick={() => setQuickTaskId(task.id)}
                     className="absolute flex h-7 items-center rounded-md text-left shadow-sm transition-transform hover:scale-[1.01] hover:shadow-md"
-                    style={{ left, top: idx * rowHeight + 8, width: barWidth }}
+                    style={{ left, top: idx * rowHeight + 10, width: barWidth }}
                     title={`${task.title} · ${shortDate(start)} - ${shortDate(end)}`}
                   >
-                    <span className={`flex h-full w-full items-center gap-1 overflow-hidden rounded-md px-2 text-[11px] font-black text-white ${barColor}`}>
-                      <Flag className={`h-3 w-3 shrink-0 ${meta.tone.split(" ")[0]}`} />
+                    <span className={`flex h-full w-full items-center gap-1 overflow-hidden rounded-md px-2 text-[11px] font-black text-white ${taskBarTone(task)}`}>
+                      <Flag className="h-3 w-3 shrink-0" />
                       <span className="truncate">{task.title}</span>
                     </span>
                   </button>
@@ -709,6 +830,128 @@ function GanttView({ tasks, onSelect, onAdd, canCreate }) {
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ReportsView({ tasks, allTasks, boardName, onExport, onPrint, onSelect }) {
+  const summary = useMemo(() => reportSummary(tasks), [tasks]);
+  const allSummary = useMemo(() => reportSummary(allTasks.filter(task => !task.archived)), [allTasks]);
+  const byResponsible = useMemo(() => groupCounts(tasks, task => task.assignedName, "Sin asignar").slice(0, 8), [tasks]);
+  const bySystem = useMemo(() => groupCounts(tasks, task => task.system, "Sin sistema").slice(0, 8), [tasks]);
+  const byStatus = useMemo(() => groupCounts(tasks, task => task.status, "Sin estado"), [tasks]);
+  const maxGroupValue = Math.max(1, ...byResponsible.map(item => item.value), ...bySystem.map(item => item.value), ...byStatus.map(item => item.value));
+  const reportCards = [
+    { label: "Tareas visibles", value: summary.total, icon: LayoutDashboard, tone: "border-slate-200 bg-white text-slate-800" },
+    { label: "Vencidas", value: summary.overdue, icon: Flame, tone: "border-red-100 bg-red-50 text-red-700" },
+    { label: "Bloqueadas", value: summary.blocked, icon: Lock, tone: "border-rose-100 bg-rose-50 text-rose-700" },
+    { label: "Sin asignar", value: summary.unassigned, icon: User, tone: "border-slate-200 bg-slate-50 text-slate-700" },
+    { label: "Alta urgencia", value: summary.urgent, icon: Flag, tone: "border-amber-100 bg-amber-50 text-amber-700" },
+    { label: "Completadas", value: summary.completed, icon: CheckCircle2, tone: "border-emerald-100 bg-emerald-50 text-emerald-700" },
+  ];
+
+  function GroupChart({ title, items, icon: Icon }) {
+    return (
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-4 flex items-center justify-between">
+          <h3 className="flex items-center gap-2 text-sm font-black text-slate-900"><Icon className="h-4 w-4 text-cyan-600" />{title}</h3>
+          <span className="text-[10px] font-black uppercase text-slate-300">{items.length} grupos</span>
+        </div>
+        <div className="space-y-3">
+          {items.map(item => (
+            <div key={item.label} className="space-y-1">
+              <div className="flex items-center justify-between gap-3 text-xs">
+                <span className="truncate font-bold text-slate-700">{item.label}</span>
+                <span className="font-black text-slate-500">{item.value}</span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full rounded-full bg-cyan-600" style={{ width: `${Math.max(6, (item.value / maxGroupValue) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+          {items.length === 0 && <p className="py-8 text-center text-sm font-semibold text-slate-400">Sin datos para mostrar.</p>}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <div className="report-print space-y-4">
+      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-xs font-black uppercase text-cyan-700">Reporte operativo</p>
+            <h2 className="mt-1 text-xl font-black text-slate-950">{boardName}</h2>
+            <p className="mt-1 text-xs font-semibold text-slate-400">
+              {summary.total} tareas visibles · {allSummary.total} activas en el board · generado {new Date().toLocaleString("es-DO")}
+            </p>
+          </div>
+          <div className="report-actions flex flex-wrap items-center gap-2">
+            <button onClick={onExport} className="flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-black text-slate-700 hover:bg-slate-50">
+              <Download className="h-4 w-4" /> CSV visible
+            </button>
+            <button onClick={onPrint} className="flex h-9 items-center gap-2 rounded-xl bg-slate-900 px-3 text-xs font-black text-white hover:bg-slate-800">
+              <Printer className="h-4 w-4" /> Imprimir / PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+        {reportCards.map(({ label, value, icon: Icon, tone }) => (
+          <div key={label} className={`rounded-xl border px-3 py-3 shadow-sm ${tone}`}>
+            <div className="flex items-center justify-between">
+              <Icon className="h-4 w-4" />
+              <span className="text-2xl font-black">{value}</span>
+            </div>
+            <p className="mt-2 text-[10px] font-black uppercase tracking-wide opacity-75">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_1fr]">
+        <GroupChart title="Por responsable" items={byResponsible} icon={Users} />
+        <GroupChart title="Por sistema" items={bySystem} icon={Server} />
+        <GroupChart title="Por estado" items={byStatus} icon={BarChart3} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h3 className="text-sm font-black text-slate-900">Checklist</h3>
+          <p className="mt-1 text-xs font-semibold text-slate-400">{summary.checklistDone}/{summary.checklistTotal} items completados</p>
+          <div className="mt-4 flex items-end gap-2">
+            <span className="text-4xl font-black text-slate-950">{summary.checklistPct}%</span>
+            <span className="pb-1 text-xs font-bold uppercase text-slate-400">cumplimiento</span>
+          </div>
+          <div className="mt-4 h-3 overflow-hidden rounded-full bg-slate-100">
+            <div className="h-full rounded-full bg-emerald-500" style={{ width: `${summary.checklistPct}%` }} />
+          </div>
+        </section>
+
+        <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="border-b border-slate-200 bg-slate-50 px-4 py-3">
+            <h3 className="text-sm font-black text-slate-900">Tareas críticas visibles</h3>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {tasks.filter(task => isTaskOverdue(task) || getOperationalState(task) === "blocked" || isUrgentTask(task)).slice(0, 10).map(task => {
+              const op = operationalStates[getOperationalState(task)] || operationalStates.normal;
+              const Op = op.icon;
+              return (
+                <button key={task.id} onClick={() => onSelect?.(task)} className="grid w-full grid-cols-[1fr_120px_120px_120px] gap-3 px-4 py-3 text-left text-xs hover:bg-slate-50">
+                  <span className="min-w-0">
+                    <span className="block truncate font-black text-slate-900">{task.title}</span>
+                    <span className="mt-0.5 flex items-center gap-1 truncate font-semibold text-slate-400"><Op className="h-3.5 w-3.5" />{op.label}</span>
+                  </span>
+                  <span className="truncate font-semibold text-slate-600">{displayPersonName(task.assignedName) || "Sin asignar"}</span>
+                  <span className="truncate font-semibold text-slate-600">{task.system || "Sin sistema"}</span>
+                  <span className={`font-black ${isTaskOverdue(task) ? "text-red-600" : "text-slate-500"}`}>{task.dueDate || "Sin fecha"}</span>
+                </button>
+              );
+            })}
+            {tasks.length === 0 && <p className="px-4 py-10 text-center text-sm font-semibold text-slate-400">Este board no tiene tareas para reportar.</p>}
+          </div>
+        </section>
       </div>
     </div>
   );
@@ -1298,7 +1541,7 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
                     ) : (
                       <div className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2">
                         {task.assignedName ? <Avatar name={task.assignedName} /> : <User className="h-5 w-5 text-slate-300" />}
-                        <span className="text-sm font-semibold text-slate-700">{task.assignedName || "Sin asignar"}</span>
+                        <span className="text-sm font-semibold text-slate-700">{displayPersonName(task.assignedName) || "Sin asignar"}</span>
                       </div>
                     )}
                   </section>
@@ -1846,6 +2089,7 @@ export default function NoraHRKanban() {
   const [showArchived, setShowArchived] = useState(false);
   const [overdueOnly, setOverdueOnly] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
   const [viewMode, setViewMode] = useState("board");
@@ -2430,9 +2674,9 @@ export default function NoraHRKanban() {
     }
   }
 
-  function exportCSV() {
+  function exportCSV(sourceTasks = tasks.filter(t => !t.archived), filename = "kanban-it-tasks.csv") {
     const headers = ["Título", "Sistema", "Tipo", "Impacto", "Urgencia", "SLA horas", "Vencimiento", "Módulo", "Fase", "Prioridad", "Esfuerzo", "Estado", "Decisión manager", "Asignado", "Solicitante", "Checklist"].map(csvCell).join(",") + "\n";
-    const rows = tasks.filter(t => !t.archived).map(t => {
+    const rows = sourceTasks.map(t => {
       const checklist = checklistProgress(t);
       const operational = operationalStates[getOperationalState(t)]?.label || "Normal";
       return [
@@ -2456,8 +2700,19 @@ export default function NoraHRKanban() {
     }).join("\n");
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "kanban-it-tasks.csv"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = filename; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
+  }
+
+  function exportVisibleCSV() {
+    exportCSV(displayedTasks, "kanban-it-report-visible.csv");
+  }
+
+  function printReport() {
+    const previousTitle = document.title;
+    document.title = `${APP_NAME} - Reporte`;
+    window.print();
+    window.setTimeout(() => { document.title = previousTitle; }, 250);
   }
 
   function toggleCollapse(s) { setCollapsed(c => ({ ...c, [s]: !c[s] })); }
@@ -2610,14 +2865,9 @@ export default function NoraHRKanban() {
               <button onClick={() => setViewMode("list")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "list" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
                 <ListFilter className="h-4 w-4" /> Task list
               </button>
-              <button onClick={() => setShowArchived(!showArchived)} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${showArchived ? "bg-amber-50 text-amber-700" : "text-slate-500"}`}>
-                <Archive className="h-4 w-4" /> Archive
+              <button onClick={() => setViewMode("reports")} className={`flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold ${viewMode === "reports" ? "bg-white text-cyan-700 shadow-sm" : "text-slate-500"}`}>
+                <BarChart3 className="h-4 w-4" /> Reportes
               </button>
-              {isLocalDemo && (
-                <button onClick={() => setShowItConfig(true)} className="flex h-6 items-center gap-1.5 rounded-md px-2.5 text-xs font-semibold text-slate-500">
-                  <Settings className="h-4 w-4" /> Configuración IT
-                </button>
-              )}
             </div>
 
             <div className="ml-auto flex items-center gap-2">
@@ -2630,13 +2880,36 @@ export default function NoraHRKanban() {
                 <LayoutDashboard className="h-4 w-4" /> <span className="hidden sm:inline">Boards</span>
               </button>
               <div className="hidden items-center gap-2 md:flex">
-                {appIsAdmin && !isLocalDemo && (
-                  <button onClick={() => setShowAdmin(true)} className="flex h-8 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50">
-                    <Settings className="h-4 w-4" /> Admin
+                <div className="relative">
+                  <button onClick={() => setShowActionsMenu(!showActionsMenu)} className={`flex h-8 items-center gap-2 rounded-xl border px-2.5 text-xs font-bold transition-colors ${showActionsMenu ? "border-cyan-200 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                    <MoreVertical className="h-4 w-4" /> Acciones
                   </button>
-                )}
-                <button onClick={exportCSV} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-600 hover:bg-slate-50">Export</button>
-                {!isLocalDemo && <button onClick={logout} className="flex h-8 items-center rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-500 hover:bg-slate-50">Salir</button>}
+                  {showActionsMenu && (
+                    <div className="absolute right-0 top-full z-50 mt-1 w-52 rounded-xl border border-slate-200 bg-white p-2 shadow-xl">
+                      <button onClick={() => { setShowArchived(!showArchived); setShowActionsMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50">
+                        <Archive className="h-4 w-4 text-slate-400" /> {showArchived ? "Ver activas" : "Ver archivadas"}
+                      </button>
+                      <button onClick={() => { exportCSV(); setShowActionsMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50">
+                        <Download className="h-4 w-4 text-slate-400" /> Exportar CSV
+                      </button>
+                      {isLocalDemo && (
+                        <button onClick={() => { setShowItConfig(true); setShowActionsMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50">
+                          <Settings className="h-4 w-4 text-slate-400" /> Configuración IT
+                        </button>
+                      )}
+                      {appIsAdmin && !isLocalDemo && (
+                        <button onClick={() => { setShowAdmin(true); setShowActionsMenu(false); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-slate-600 hover:bg-slate-50">
+                          <Settings className="h-4 w-4 text-slate-400" /> Admin
+                        </button>
+                      )}
+                      {!isLocalDemo && (
+                        <button onClick={logout} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50">
+                          <X className="h-4 w-4" /> Salir
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <Avatar name={appUserData?.name || appUser.email} />
               </div>
               <div className="relative md:hidden">
@@ -2649,6 +2922,17 @@ export default function NoraHRKanban() {
                       {appUserData?.name || appUser.email}
                       <span className={`ml-1 rounded-md px-1.5 py-0.5 text-[10px] font-medium ${appIsAdmin ? "bg-cyan-100 text-cyan-700" : "bg-slate-100 text-slate-500"}`}>{appIsAdmin ? "Admin" : "Member"}</span>
                     </div>
+                    {[
+                      ["board", "Kanban"],
+                      ["gantt", "Gantt"],
+                      ["list", "Task list"],
+                      ["reports", "Reportes"],
+                    ].map(([mode, label]) => (
+                      <button key={mode} onClick={() => { setViewMode(mode); setShowMobileMenu(false); }} className={`w-full text-left rounded-lg px-3 py-2 text-xs font-medium transition-colors ${viewMode === mode ? "bg-cyan-50 text-cyan-700" : "text-slate-600 hover:bg-slate-100"}`}>
+                        {label}
+                      </button>
+                    ))}
+                    <div className="my-1 border-t border-slate-100" />
                     {appIsAdmin && !isLocalDemo && (
                       <button onClick={() => { setShowAdmin(true); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Admin</button>
                     )}
@@ -2685,8 +2969,8 @@ export default function NoraHRKanban() {
                     <Plus className="h-4 w-4" /> Nueva tarea
                   </button>
                 )}
-                <button onClick={() => setShowFilters(!showFilters)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors md:hidden">
-                  Filtros
+                <button onClick={() => setShowFilters(!showFilters)} className={`rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${showFilters ? "border-cyan-200 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                  {showFilters ? "Ocultar filtros" : hasActiveViewFilters ? "Filtros activos" : "Filtros"}
                 </button>
                 {hasActiveViewFilters && (
                   <button onClick={clearViewFilters} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50">
@@ -2716,7 +3000,7 @@ export default function NoraHRKanban() {
               ))}
             </div>
 
-            <div className={`${showFilters ? "grid" : "hidden"} grid-cols-2 gap-2 md:grid md:grid-cols-[repeat(8,minmax(0,auto))] md:items-center`}>
+            <div className={`${showFilters ? "grid" : "hidden"} grid-cols-2 gap-2 md:grid-cols-[repeat(8,minmax(0,auto))] md:items-center`}>
               <select value={mod} onChange={e => setMod(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 <option value="Todos">Módulos</option>{moduleOptions.map(m => <option key={m} value={m}>{m}</option>)}
               </select>
@@ -2738,7 +3022,7 @@ export default function NoraHRKanban() {
                     <option value="Todos">SLA</option><option value="Con SLA">Con SLA</option><option value="Sin SLA">Sin SLA</option><option value="Vencidas">Vencidas</option>
                   </select>
                   <select value={responsibleFilter} onChange={e => setResponsibleFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Responsable</option>{responsibleOptions.map(v => <option key={v} value={v}>{v}</option>)}
+                    <option value="Todos">Responsable</option>{responsibleOptions.map(v => <option key={v} value={v}>{displayPersonName(v)}</option>)}
                   </select>
                 </>
               )}
@@ -2768,7 +3052,7 @@ export default function NoraHRKanban() {
                         <span className="block truncate font-bold text-slate-900">{task.title}</span>
                         <span className="mt-0.5 flex items-center gap-1.5 truncate text-xs text-slate-400"><Op className="h-3.5 w-3.5" />{op.label}</span>
                       </span>
-                      <span className="truncate font-semibold text-slate-600">{task.assignedName || "Sin asignar"}</span>
+                      <span className="truncate font-semibold text-slate-600">{displayPersonName(task.assignedName) || "Sin asignar"}</span>
                       <span className="truncate text-slate-600">{task.system || "Sin sistema"}</span>
                       <span className="font-semibold text-slate-600">{task.slaHours ? `${task.slaHours}h` : "Sin SLA"}</span>
                       <span className={`font-semibold ${isTaskOverdue(task) ? "text-red-600" : "text-slate-500"}`}>{task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Sin fecha"}</span>
@@ -2783,7 +3067,9 @@ export default function NoraHRKanban() {
               </div>
             </div>
           ) : viewMode === "gantt" ? (
-            <GanttView tasks={displayedTasks} onSelect={setDetailT} onAdd={openAddTask} canCreate={appCanCreate} />
+            <GanttView tasks={displayedTasks} onSelect={setDetailT} onAdd={openAddTask} canCreate={appCanCreate} canEdit={appCanEdit} onTaskPatch={patchTask} />
+          ) : viewMode === "reports" ? (
+            <ReportsView tasks={displayedTasks} allTasks={tasks} boardName={activeBoardName} onExport={exportVisibleCSV} onPrint={printReport} onSelect={setDetailT} />
           ) : (
             <>
               {tasks.length === 0 ? (

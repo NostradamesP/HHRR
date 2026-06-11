@@ -291,3 +291,20 @@ Fase 5 - Post-publicacion:
 - Nombre visible actualizado a `Kanban IT Departament` en app, sidebar, board default y metadata HTML.
 - Agregada capa de branding centralizada para mostrar `Kanban IT Departament` aunque boards legacy sigan guardados como Nora/NoraHR en Firebase/localStorage.
 - Monograma visible cambiado de `N` a `IT` en login, header y sidebar.
+
+==============================
+2026-06-11 - Gantt V2 + Reportes
+==============================
+- Gantt V2 con rango inicial mes actual + proximo mes, controles Hoy/Mes/2 meses/Trimestre y navegacion anterior/siguiente.
+- Gantt ordena por urgencia operativa y permite editar startDate, dueDate y SLA desde un panel rapido sin abrir flujo separado.
+- Tareas sin fecha aparecen agrupadas con accion rapida para asignar fecha de hoy.
+- Agregada vista Reportes con metricas de tareas visibles, vencidas, bloqueadas, sin asignar, alta urgencia, completadas y checklist.
+- Reportes incluye agrupaciones por responsable, sistema y estado, lista de tareas criticas, export CSV visible e impresion/PDF.
+
+==============================
+2026-06-11 - Polish UI operacional
+==============================
+- Header simplificado: navegacion principal queda en Kanban/Gantt/Task list/Reportes y acciones secundarias pasan a menu Acciones.
+- Filtros avanzados ahora se despliegan bajo demanda tambien en desktop para reducir ruido visual.
+- Cards compactadas: se removieron selects inline y metadata duplicada; la edicion queda en card detail.
+- Labels demo legacy como `Demo NoraHR` se muestran como `IT Manager` sin cambiar datos guardados.
