@@ -34,8 +34,8 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appIsAdmin = isAdmin || isLocalDemo;
   const appUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
-  const appUserData = userData || (isLocalDemo ? { name: "Demo NoraHR" } : null);
-  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "NoraHR Roadmap" }] : boards);
+  const appUserData = userData || (isLocalDemo ? { name: "IT Manager" } : null);
+  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "Kanban IT Departament" }] : boards);
   const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : activeBoardId);
   const [search, setSearch] = useState("");
   const [newName, setNewName] = useState("");
@@ -81,7 +81,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
             <div className="flex items-center gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-red-600 text-base font-black text-white shadow-sm">N</span>
               <div>
-                <h2 className="text-sm font-black text-slate-950">NoraHR Workspace</h2>
+                <h2 className="text-sm font-black text-slate-950">Kanban IT Departament</h2>
                 <p className="text-xs font-medium text-slate-400">{appBoards.length} boards activos</p>
               </div>
             </div>

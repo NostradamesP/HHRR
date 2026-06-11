@@ -24,7 +24,7 @@ export default function ChatPanel() {
   const { activeBoardId } = useBoard();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const chatUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
-  const chatUserData = userData || (isLocalDemo ? { name: "Demo NoraHR" } : null);
+  const chatUserData = userData || (isLocalDemo ? { name: "IT Manager" } : null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const bottomRef = useRef(null);

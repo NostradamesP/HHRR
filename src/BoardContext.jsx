@@ -5,7 +5,7 @@ import { useAuth } from "./AuthContext";
 
 const BoardContext = createContext(null);
 const LOCAL_BOARDS_KEY = "norahr.local.boards";
-const DEFAULT_LOCAL_BOARD = { id: "local-demo-board", name: "NoraHR Roadmap", ownerId: "local-demo-user", members: ["local-demo-user"] };
+const DEFAULT_LOCAL_BOARD = { id: "local-demo-board", name: "Kanban IT Departament", ownerId: "local-demo-user", members: ["local-demo-user"] };
 
 function safeGetItem(key) {
   try {
@@ -179,7 +179,7 @@ export function BoardProvider({ children }) {
         } else if (!initialized.current) {
           initialized.current = true;
           addDoc(collection(db, "boards"), {
-            name: "NoraHR Roadmap",
+            name: "Kanban IT Departament",
             createdBy: user.uid,
             ownerId: user.uid,
             members: [user.uid],

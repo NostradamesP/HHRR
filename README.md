@@ -1,6 +1,6 @@
-# NoraHR Roadmap
+# Kanban IT Departament
 
-Roadmap interactivo para planificar NoraHR.
+Kanban operativo para planificar y gestionar tareas del departamento de IT.
 
 ## Ejecutar localmente
 

@@ -1,5 +1,5 @@
 import React, { Component, useMemo, useState, useEffect, useRef, useCallback } from "react";
-import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, DragOverlay } from "@dnd-kit/core";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, DragOverlay, pointerWithin, rectIntersection } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, getDocs, setDoc, serverTimestamp } from "firebase/firestore";
@@ -66,7 +66,7 @@ class ErrorBoundary extends Component {
 }
 
 const initialTasks = [
-  { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es NoraHR, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", effort: "Medio" },
+  { id: 1, phase: "V1", module: "Producto", title: "Definir visión del producto", description: "Documento corto explicando qué es Kanban IT Departament, para quién es y qué problema resuelve mejor que SPN.", priority: "Alta", status: "Pendiente", effort: "Medio" },
   { id: 2, phase: "V1", module: "Arquitectura", title: "Elegir stack definitivo", description: "Confirmar Flutter + NestJS/FastAPI + PostgreSQL + Docker + storage privado.", priority: "Alta", status: "Pendiente", effort: "Medio" },
   { id: 3, phase: "V1", module: "Seguridad", title: "Definir modelo de permisos", description: "Crear roles: Super Admin, Empresa Admin, RRHH, Supervisor, Empleado, Nómina y Auditor.", priority: "Alta", status: "Pendiente", effort: "Alto" },
   { id: 4, phase: "V1", module: "Infraestructura", title: "Crear monorepo inicial", description: "Estructura apps/mobile, apps/admin, backend, docs e infra.", priority: "Alta", status: "Pendiente", effort: "Bajo" },
@@ -116,7 +116,7 @@ const defaultItConfig = {
   ticketTypes: ["Incidente", "Cambio", "Mantenimiento", "Acceso", "Proyecto"],
   impacts: ["Bajo", "Medio", "Alto", "Crítico"],
   urgencies: ["Baja", "Media", "Alta", "Crítica"],
-  team: ["Demo NoraHR", "IT Manager", "Soporte Nivel 1", "Infraestructura"],
+  team: ["IT Manager", "Soporte Nivel 1", "Infraestructura", "Mesa de ayuda"],
   jobTitles: [
     "IT Project Manager",
     "System Administrator",
@@ -178,7 +178,7 @@ function enrichLocalTask(task, idx, config = defaultItConfig) {
     dueDate: task.dueDate || "",
     archived: Boolean(task.archived),
     assignedTo: task.assignedTo || "local-demo-user",
-    assignedName: task.assignedName || "Demo NoraHR",
+    assignedName: task.assignedName || "IT Manager",
     ticketType: task.ticketType || config.ticketTypes[idx % config.ticketTypes.length],
     requester: task.requester || "Operaciones IT",
     system: task.system || config.systems[idx % config.systems.length],
@@ -257,6 +257,14 @@ function diffDays(a, b) {
 
 function shortDate(date) {
   return date.toLocaleDateString("es-DO", { day: "numeric", month: "short" });
+}
+
+function kanbanCollisionDetection(args) {
+  const pointerHits = pointerWithin(args);
+  if (pointerHits.length > 0) return pointerHits;
+  const rectHits = rectIntersection(args);
+  if (rectHits.length > 0) return rectHits;
+  return closestCenter(args);
 }
 
 function cleanValue(value) {
@@ -856,7 +864,7 @@ function TaskDetail({ task, onDelete, onClose, onStatus, isAdmin, onArchive, act
   const { user, userData } = useAuth();
   const isLocalDetailDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const detailUser = user || (isLocalDetailDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
-  const detailUserData = userData || (isLocalDetailDemo ? { name: "Demo NoraHR" } : null);
+  const detailUserData = userData || (isLocalDetailDemo ? { name: "IT Manager" } : null);
   const statusOrder = ["Pendiente", "En progreso", "Bloqueado", "Hecho"];
   const currentIdx = statusOrder.indexOf(task.status);
   const progress = currentIdx < 0 ? 0 : Math.round((currentIdx / (statusOrder.length - 1)) * 100);
@@ -1673,7 +1681,7 @@ function LoginForm() {
       <div className="w-full max-w-sm rounded-2xl border bg-white p-8 shadow-lg">
         <div className="mb-6 text-center">
           <span className="mx-auto flex h-8 w-8 items-center justify-center rounded-xl bg-red-600 text-lg font-bold text-white">N</span>
-          <h1 className="mt-3 text-lg font-bold text-slate-900">NoraHR Roadmap</h1>
+          <h1 className="mt-3 text-lg font-bold text-slate-900">Kanban IT Departament</h1>
           <p className="text-sm text-slate-400">{showReset ? "Restablecer contraseña" : mode === "login" ? "Inicia sesión para continuar" : "Crea tu cuenta"}</p>
         </div>
         {showReset ? (
@@ -1812,10 +1820,10 @@ export default function NoraHRKanban() {
   const { activeBoardId, boards } = useBoard();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
-  const appUserData = userData || (isLocalDemo ? { name: "Demo NoraHR", role: "admin", email: "demo@norahr.local" } : null);
+  const appUserData = userData || (isLocalDemo ? { name: "IT Manager", role: "admin", email: "demo@norahr.local" } : null);
   const appIsAdmin = isAdmin || isLocalDemo;
   const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : null);
-  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "NoraHR Roadmap" }] : boards);
+  const appBoards = boards.length > 0 ? boards : (isLocalDemo ? [{ id: "local-demo-board", name: "Kanban IT Departament" }] : boards);
   const [tasks, setTasks] = useState([]);
   const [users, setUsers] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
@@ -2126,7 +2134,7 @@ export default function NoraHRKanban() {
       taskId,
       taskTitle,
       details: details || "",
-      userName: appUserData?.name || "Demo NoraHR",
+      userName: appUserData?.name || "IT Manager",
       createdAt: new Date().toISOString(),
     };
     all[taskId] = [...(all[taskId] || []), log];
@@ -2447,7 +2455,7 @@ export default function NoraHRKanban() {
     }).join("\n");
     const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "norahr-tasks.csv"; a.click();
+    const a = document.createElement("a"); a.href = url; a.download = "kanban-it-tasks.csv"; a.click();
     setTimeout(() => URL.revokeObjectURL(url), 10000);
   }
 
@@ -2523,7 +2531,7 @@ export default function NoraHRKanban() {
 
   const activeBoardName = useMemo(() => {
     const b = appBoards.find(b => b.id === appActiveBoardId);
-    return b ? b.name : "NoraHR Roadmap";
+    return b ? b.name : "Kanban IT Departament";
   }, [appBoards, appActiveBoardId]);
 
   const hasActiveViewFilters =
@@ -2570,7 +2578,7 @@ export default function NoraHRKanban() {
 
   return (
     <>
-    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
+    <DndContext sensors={sensors} collisionDetection={kanbanCollisionDetection} onDragStart={(e) => setActiveId(String(e.active.id))} onDragEnd={handleDragEnd} onDragCancel={() => setActiveId(null)}>
       <div className="min-h-screen bg-slate-200/60">
         <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
           <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-3 py-1.5 md:px-3">

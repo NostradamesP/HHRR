@@ -283,3 +283,9 @@ Fase 5 - Post-publicacion:
 - Agregada pestaña Gantt junto a Kanban/Task list, con lista lateral, timeline horizontal y barras por startDate/dueDate.
 - Agregado campo opcional `startDate` en creacion y detalle de card; si falta, Gantt usa dueDate como tarea de un dia.
 - Tareas sin dueDate aparecen como Sin fecha en el panel izquierdo del Gantt.
+
+==============================
+2026-06-11 - Fix drop en columnas vacias + rename
+==============================
+- Drag and drop ahora usa deteccion por puntero con fallback a interseccion/centro para permitir soltar cards en columnas vacias.
+- Nombre visible actualizado a `Kanban IT Departament` en app, sidebar, board default y metadata HTML.
