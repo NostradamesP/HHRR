@@ -322,3 +322,14 @@ Fase 5 - Post-publicacion:
 - Listado global de usuarios se carga solo para admin; miembros/managers usan su propio perfil y datos del board.
 - Agregado `firebase.json` para desplegar reglas de Firestore de forma controlada cuando se use Firebase CLI.
 - Politica: no subir `service-account.json`; mantener GitHub Pages como hosting actual y budget alert recomendado de USD 10/mes.
+
+==============================
+2026-06-11 - Login premium modal
+==============================
+- Login redisenado como landing minimal premium para `Kanban IT Departament`.
+- Header publico con monograma IT, hero operativo IT, preview visual de kanban y tarjetas de capacidades.
+- Login ahora abre en modal interactivo con backdrop blur, cierre por X/backdrop/Escape y animacion suave.
+- Se mantuvieron login, crear cuenta y recuperacion de contrasena con Firebase Auth.
+- Agregado toggle para mostrar/ocultar contrasena y mensaje de permisos para cuentas nuevas.
+- Texto obsoleto del panel Admin corregido: nuevos usuarios entran como member y admin asigna permisos.
+- Pulido pro: metricas operativas, mini board con SLA, timeline, actividad reciente y micro-animaciones CSS.

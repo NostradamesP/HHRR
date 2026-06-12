@@ -38,6 +38,47 @@
   50% { opacity: 0.2; }
 }
 
+@keyframes login-rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes login-card-shift {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes login-float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes login-pulse {
+  0%, 100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+    filter: saturate(1.25);
+  }
+}
+
 .animate-fade-in-up { animation: fade-in-up 0.6s ease-out forwards; }
 .animate-fade-in-down { animation: fade-in-down 0.6s ease-out forwards; }
 .animate-fade-in-right { animation: fade-in-right 0.6s ease-out forwards; }
@@ -56,6 +97,22 @@
 
 .opacity-0-initial { opacity: 0; }
 
+.login-rise {
+  animation: login-rise 520ms ease-out both;
+}
+
+.login-card-shift {
+  animation: login-card-shift 520ms ease-out both;
+}
+
+.login-float {
+  animation: login-float 4.5s ease-in-out infinite;
+}
+
+.login-pulse {
+  animation: login-pulse 2.6s ease-in-out infinite;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-fade-in-up,
   .animate-fade-in-down,
@@ -63,7 +120,11 @@
   .animate-fade-in-left,
   .animate-float,
   .animate-shake,
-  .animate-pulse-slow {
+  .animate-pulse-slow,
+  .login-rise,
+  .login-card-shift,
+  .login-float,
+  .login-pulse {
     animation: none;
     opacity: 1;
     transform: none;
