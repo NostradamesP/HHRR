@@ -31,6 +31,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  SearchX,
   Send,
   Server,
   Settings,
@@ -511,9 +512,9 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   );
 }
 
-function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users, deletingId }) {
+function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users, deletingId, index = 0 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
-  const s = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 };
+  const s = { transform: CSS.Transform.toString(transform), transition };
 
   const overdue = isTaskOverdue(task);
   const isBlocked = task.status === "Bloqueado";
@@ -533,10 +534,13 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
     onSelect(task);
   }
 
+  const animDelay = Math.min(index * 50, 300);
+  const cardStyle = isDragging ? s : { ...s, animationDelay: `${animDelay}ms` };
+
   return (
-    <div ref={setNodeRef} style={s} {...attributes} {...listeners}
+    <div ref={setNodeRef} style={cardStyle} {...attributes} {...listeners}
       onClick={openCard}
-      className={`group relative rounded-lg border border-slate-200/80 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300" : "hover:border-slate-300 hover:shadow-md"}`}>
+      className={`group relative rounded-lg border border-slate-200/80 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300 opacity-40" : "opacity-0-initial animate-fade-in-up hover:border-slate-300 hover:shadow-md"}`}>
       {isAdmin && !deleteMode && (
         <button
           type="button"
@@ -608,10 +612,24 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
         )}
         <div className="p-1.5">
           <SortableContext items={items.map(t => t.id)} strategy={verticalListSortingStrategy}>
-            <div className="space-y-1.5">
-              {items.map(t => <SortableCard key={t.id} task={t} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} deletingId={deletingId} />)}
-              {isAdmin && <DroppableZone status={status} />}
-            </div>
+            {items.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-10 text-center">
+                <div className="mb-2 flex h-10 w-10 items-center justify-center rounded-full bg-slate-100">
+                  <Plus className="h-5 w-5 text-slate-300" />
+                </div>
+                <p className="text-xs font-semibold text-slate-400">Sin tareas</p>
+                {isAdmin && (
+                  <button onClick={() => onAdd(status)} className="mt-2 text-xs font-bold text-cyan-600 hover:text-cyan-700 transition-colors">
+                    Agregar primera tarea
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                {items.map((t, i) => <SortableCard key={t.id} task={t} index={i} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} deletingId={deletingId} />)}
+                {isAdmin && <DroppableZone status={status} />}
+              </div>
+            )}
           </SortableContext>
         </div>
       </div>
@@ -2514,7 +2532,7 @@ export default function NoraHRKanban() {
   const [itConfig, setItConfig] = useState(() => readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig));
   const [activeId, setActiveId] = useState(null);
   const [toast, setToast] = useState(null);
-  const showToast = useCallback((msg) => setToast(msg), []);
+  const showToast = useCallback((msg, type = 'error') => setToast({ message: msg, type }), []);
   const [deletingId, setDeletingId] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
@@ -3277,7 +3295,7 @@ export default function NoraHRKanban() {
                         </button>
                       )}
                       {!isLocalDemo && (
-                        <button onClick={logout} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50">
+                        <button onClick={() => { if (confirm("Cerrar sesion?")) logout(); }} className="mt-1 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-bold text-red-500 hover:bg-red-50">
                           <X className="h-4 w-4" /> Salir
                         </button>
                       )}
@@ -3322,7 +3340,7 @@ export default function NoraHRKanban() {
                       </button>
                     )}
                     <button onClick={() => { exportCSV(); setShowMobileMenu(false); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-slate-600 hover:bg-slate-100 transition-colors">Export CSV</button>
-                    {!isLocalDemo && <button onClick={logout} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">Salir</button>}
+                    {!isLocalDemo && <button onClick={() => { if (confirm("Cerrar sesion?")) logout(); }} className="w-full text-left rounded-lg px-3 py-2 text-xs font-medium text-red-500 hover:bg-red-50 transition-colors">Salir</button>}
                   </div>
                 )}
               </div>
@@ -3458,7 +3476,11 @@ export default function NoraHRKanban() {
                   )}
                 </div>
               ) : displayedTasks.length === 0 ? (
-                <div className="rounded-xl border border-slate-200 bg-white px-4 py-12 text-center text-sm font-semibold text-slate-400 shadow-sm">No hay tareas con estos filtros.</div>
+                <div className="flex min-h-[320px] flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-white px-4 text-center shadow-sm">
+                  <SearchX className="mb-3 h-10 w-10 text-slate-300" />
+                  <h2 className="text-sm font-black text-slate-800">Sin resultados</h2>
+                  <p className="mt-1 max-w-sm text-xs font-semibold text-slate-400">Ninguna tarea coincide con los filtros actuales. Intenta ajustar los criterios de búsqueda.</p>
+                </div>
               ) : (
                 <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
                   {columns.map(({ status, items }) => (
@@ -3509,25 +3531,44 @@ export default function NoraHRKanban() {
       {sidebarOpen ? "▶" : "◀"}
     </button>
     <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} onQuickAction={handleSidebarAction} users={users} />
-    <ToastNotification message={toast} onClose={() => setToast(null)} />
+    <ToastNotification toast={toast} onClose={() => setToast(null)} />
     </>
   );
 }
 
-function ToastNotification({ message, onClose }) {
+function ToastNotification({ toast, onClose }) {
+  const [exiting, setExiting] = useState(false);
+
   useEffect(() => {
-    if (!message) return;
-    const t = setTimeout(onClose, 4000);
+    if (!toast) return;
+    setExiting(false);
+    const t = setTimeout(() => {
+      setExiting(true);
+      setTimeout(onClose, 300);
+    }, 4000);
     return () => clearTimeout(t);
-  }, [message, onClose]);
-  if (!message) return null;
+  }, [toast, onClose]);
+
+  if (!toast) return null;
+
+  const type = toast.type || 'error';
+  const colors = {
+    error: { border: 'border-red-200', bg: 'bg-red-50', icon: 'bg-red-500', text: 'text-red-800', dot: 'bg-red-500' },
+    success: { border: 'border-emerald-200', bg: 'bg-emerald-50', icon: 'bg-emerald-500', text: 'text-emerald-800', dot: 'bg-emerald-500' },
+    info: { border: 'border-blue-200', bg: 'bg-blue-50', icon: 'bg-blue-500', text: 'text-blue-800', dot: 'bg-blue-500' },
+  };
+  const c = colors[type] || colors.error;
+
   return (
-    <div className="fixed bottom-6 right-6 z-[100] max-w-sm animate-in slide-in-from-right-4 fade-in duration-300 rounded-xl border border-red-200 bg-white px-4 py-3 shadow-xl">
-      <div className="flex items-start gap-3">
-        <span className="text-sm text-red-600 font-semibold leading-snug">{message}</span>
-        <button onClick={onClose} className="shrink-0 text-slate-400 hover:text-slate-600">
-          <X className="h-4 w-4" />
-        </button>
+    <div className={`fixed bottom-6 right-6 z-[100] max-w-sm transition-all duration-300 ${exiting ? 'opacity-0 translate-x-4' : 'opacity-100 translate-x-0 animate-in slide-in-from-right-4 fade-in duration-300'}`}>
+      <div className={`rounded-xl border ${c.border} ${c.bg} px-4 py-3 shadow-xl`}>
+        <div className="flex items-start gap-3">
+          <span className={`mt-0.5 h-2 w-2 shrink-0 rounded-full ${c.dot}`} />
+          <span className={`text-sm font-semibold leading-snug ${c.text}`}>{toast.message}</span>
+          <button onClick={() => { setExiting(true); setTimeout(onClose, 300); }} className="shrink-0 text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
     </div>
   );
