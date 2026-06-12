@@ -4,6 +4,7 @@ import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalList
 import { CSS } from "@dnd-kit/utilities";
 import { collection, onSnapshot, query, orderBy, where, limit, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, increment } from "firebase/firestore";
 import {
+  AlertTriangle,
   Archive,
   BarChart3,
   Calendar,
@@ -13,8 +14,12 @@ import {
   Circle,
   Clock3,
   Download,
+  Eye,
+  EyeOff,
+  FileText,
   Flag,
   Flame,
+  KanbanSquare,
   LayoutDashboard,
   ListFilter,
   Loader2,
@@ -1851,6 +1856,409 @@ function ITConfigPanel({ config, onSave, onReset, onClose }) {
   );
 }
 
+function LoadingScreen({ message = "Cargando tu kanban", subtitle = "Preparando tu espacio de trabajo..." }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#f8f9fa]">
+      <div className="text-center opacity-0-initial animate-fade-in-up">
+        <div className="relative mx-auto mb-6 h-20 w-20">
+          <div className="absolute inset-0 rounded-2xl bg-red-600/20 animate-pulse" />
+          <div className="relative flex h-full w-full items-center justify-center rounded-2xl bg-red-600 shadow-lg">
+            <span className="text-3xl font-bold text-white">{APP_MONOGRAM}</span>
+          </div>
+        </div>
+        <h2 className="text-xl font-semibold text-slate-900 mb-2">{message}</h2>
+        <p className="text-sm text-slate-500">{subtitle}</p>
+        <div className="mt-6 flex justify-center gap-2">
+          <div className="h-2 w-2 rounded-full bg-red-600 animate-bounce animation-delay-0" />
+          <div className="h-2 w-2 rounded-full bg-red-600 animate-bounce animation-delay-200" />
+          <div className="h-2 w-2 rounded-full bg-red-600 animate-bounce animation-delay-400" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LandingPage({ onOpenLogin }) {
+  const [scrolled, setScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-[#f8f9fa] relative overflow-hidden">
+      <div className="absolute inset-0 opacity-[0.03]">
+        <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+              <circle cx="20" cy="20" r="1" fill="currentColor" className="text-slate-900" />
+            </pattern>
+          </defs>
+          <rect width="100%" height="100%" fill="url(#grid)" />
+        </svg>
+      </div>
+
+      <nav className={`sticky top-0 z-40 transition-all duration-300 ${scrolled ? "bg-white/90 backdrop-blur-md shadow-sm border-b border-slate-200" : "bg-transparent"}`}>
+        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div className="flex h-16 items-center justify-between">
+            <div className="flex items-center gap-3 opacity-0-initial animate-fade-in-down">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-600 text-sm font-bold text-white shadow-sm">{APP_MONOGRAM}</span>
+              <span className="text-lg font-bold text-slate-900">{APP_NAME}</span>
+            </div>
+            <button onClick={onOpenLogin} className="flex items-center gap-2 rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 transition-all hover:scale-105 active:scale-95 opacity-0-initial animate-fade-in-down animation-delay-100">
+              <User className="h-4 w-4" />
+              <span className="hidden sm:inline">Iniciar sesion</span>
+            </button>
+          </div>
+        </div>
+      </nav>
+
+      <main className="relative z-10">
+        <section className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 pt-16 pb-24">
+          <div className="grid lg:grid-cols-2 gap-12 items-center">
+            <div>
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-slate-900 leading-tight opacity-0-initial animate-fade-in-up animation-delay-200">
+                Gestiona tu departamento de IT con{" "}
+                <span className="text-red-600">claridad</span>
+              </h1>
+              <p className="mt-6 text-lg text-slate-500 max-w-md opacity-0-initial animate-fade-in-up animation-delay-300">
+                Organiza tareas, visualiza el progreso de tu equipo y toma decisiones con datos reales. Todo en un solo lugar.
+              </p>
+              <div className="mt-8 flex flex-wrap gap-4 opacity-0-initial animate-fade-in-up animation-delay-400">
+                <button onClick={onOpenLogin} className="rounded-xl bg-red-600 px-6 py-3 text-sm font-semibold text-white hover:bg-red-700 transition-all hover:scale-105 active:scale-95 shadow-lg shadow-red-600/20">
+                  Comenzar ahora
+                </button>
+                <a href="#features" className="rounded-xl border border-slate-300 bg-white px-6 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-all">
+                  Ver funcionalidades
+                </a>
+              </div>
+            </div>
+
+            <div className="relative opacity-0-initial animate-fade-in-left animation-delay-300">
+              <div className="animate-float">
+                <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-2xl shadow-slate-900/10">
+                  <div className="flex items-center gap-2 mb-4">
+                    <div className="flex gap-1.5">
+                      <div className="h-3 w-3 rounded-full bg-red-400" />
+                      <div className="h-3 w-3 rounded-full bg-amber-400" />
+                      <div className="h-3 w-3 rounded-full bg-emerald-400" />
+                    </div>
+                    <div className="flex-1 h-6 rounded-lg bg-slate-100" />
+                  </div>
+                  <div className="grid grid-cols-4 gap-3">
+                    {["Pendiente", "En progreso", "Bloqueado", "Hecho"].map((status, i) => (
+                      <div key={status} className="space-y-2">
+                        <div className="flex items-center gap-1.5">
+                          <div className={`h-2 w-2 rounded-full ${i === 0 ? "bg-slate-400" : i === 1 ? "bg-cyan-500" : i === 2 ? "bg-amber-500" : "bg-emerald-500"}`} />
+                          <span className="text-[10px] font-semibold text-slate-600">{status}</span>
+                        </div>
+                        <div className="space-y-1.5">
+                          {[1, 2].map(j => (
+                            <div key={j} className="rounded-lg border border-slate-100 bg-slate-50 p-2">
+                              <div className="h-2 w-3/4 rounded bg-slate-200 mb-1" />
+                              <div className="h-2 w-1/2 rounded bg-slate-100" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="features" className="bg-white py-24 border-t border-slate-200">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div className="text-center mb-16">
+              <h2 className="text-3xl font-bold text-slate-900">Todo lo que necesitas</h2>
+              <p className="mt-3 text-slate-500">Herramientas disenadas para equipos de IT modernos</p>
+            </div>
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { icon: KanbanSquare, title: "Tablero Kanban", desc: "Arrastra tareas entre columnas con drag & drop intuitivo", color: "text-cyan-600", bg: "bg-cyan-50" },
+                { icon: BarChart3, title: "Dashboard", desc: "Metricas en tiempo real: tareas vencidas, en progreso y completadas", color: "text-emerald-600", bg: "bg-emerald-50" },
+                { icon: FileText, title: "Reportes", desc: "Exporta reportes detallados en PDF o CSV para stakeholders", color: "text-amber-600", bg: "bg-amber-50" },
+                { icon: Users, title: "Colaboracion", desc: "Trabaja con tu equipo en tiempo real con roles y permisos", color: "text-red-600", bg: "bg-red-50" },
+              ].map((feature, i) => (
+                <div key={feature.title} className={`group rounded-2xl border border-slate-200 bg-white p-6 hover:shadow-xl hover:-translate-y-1 transition-all duration-300 opacity-0-initial animate-fade-in-up animation-delay-${(i + 3) * 100}`}>
+                  <div className={`inline-flex h-12 w-12 items-center justify-center rounded-xl ${feature.bg} ${feature.color} group-hover:rotate-12 transition-transform duration-300`}>
+                    <feature.icon className="h-6 w-6" />
+                  </div>
+                  <h3 className="mt-4 text-lg font-bold text-slate-900">{feature.title}</h3>
+                  <p className="mt-2 text-sm text-slate-500">{feature.desc}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <footer className="border-t border-slate-200 bg-white py-8">
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 text-center">
+            <p className="text-sm text-slate-400">{APP_NAME} &copy; {new Date().getFullYear()}</p>
+          </div>
+        </footer>
+      </main>
+    </div>
+  );
+}
+
+function LoginModal({ isOpen, onClose, onLoginSuccess }) {
+  const { login, signup } = useAuth();
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
+  const [showReset, setShowReset] = useState(false);
+  const [showPwd, setShowPwd] = useState(false);
+  const [showConfirmPwd, setShowConfirmPwd] = useState(false);
+  const [capsOn, setCapsOn] = useState(false);
+  const [shakeError, setShakeError] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setPassword("");
+      setConfirmPassword("");
+      setError("");
+      setShowPwd(false);
+      setShowConfirmPwd(false);
+      setCapsOn(false);
+      setShakeError(false);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleEsc = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handleEsc);
+    return () => window.removeEventListener("keydown", handleEsc);
+  }, [isOpen, onClose]);
+
+  function getStrength(pwd) {
+    if (pwd.length < 6) return "weak";
+    if (pwd.length >= 8 && (/[A-Z]/.test(pwd) || /[0-9]/.test(pwd))) return "strong";
+    return "medium";
+  }
+
+  const strength = getStrength(password);
+  const strengthConfig = {
+    weak: { bars: 1, color: "bg-red-500", label: "Debil" },
+    medium: { bars: 2, color: "bg-amber-500", label: "Media" },
+    strong: { bars: 3, color: "bg-emerald-500", label: "Fuerte" },
+  };
+
+  function triggerShake() {
+    setShakeError(true);
+    setTimeout(() => setShakeError(false), 300);
+  }
+
+  async function handleSubmit(e) {
+    e.preventDefault();
+    setError("");
+
+    if (mode === "signup" && password !== confirmPassword) {
+      setError("Las contrasenas no coinciden");
+      triggerShake();
+      return;
+    }
+
+    if (mode === "signup" && strength === "weak") {
+      setError("La contrasena es muy debil");
+      triggerShake();
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      if (mode === "login") {
+        await login(email, password);
+      } else {
+        await signup(email, password, name);
+      }
+      if (onLoginSuccess) onLoginSuccess();
+    } catch (err) {
+      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+        setError("Correo o contrasena incorrectos");
+      } else if (err.code === "auth/email-already-in-use") {
+        setError("Este correo ya esta registrado");
+      } else if (err.code === "auth/weak-password") {
+        setError("La contrasena debe tener al menos 6 caracteres");
+      } else if (err.code === "auth/invalid-email") {
+        setError("Correo electronico invalido");
+      } else if (err.code === "auth/too-many-requests") {
+        setError("Demasiados intentos. Intenta de nuevo mas tarde.");
+      } else if (err.code === "auth/network-request-failed") {
+        setError("Error de conexion. Verifica tu internet.");
+      } else if (err.code === "auth/user-disabled") {
+        setError("Esta cuenta ha sido deshabilitada.");
+      } else {
+        setError("Error al iniciar sesion. Verifica tus credenciales.");
+      }
+      triggerShake();
+    }
+    setSubmitting(false);
+  }
+
+  async function handleReset() {
+    if (!email.trim()) { setError("Ingresa tu correo primero"); triggerShake(); return; }
+    setSubmitting(true);
+    setError("");
+    try {
+      const { sendPasswordResetEmail } = await import("firebase/auth");
+      const { auth } = await import("./firebase");
+      await sendPasswordResetEmail(auth, email.trim());
+      setResetSent(true);
+    } catch (err) {
+      if (err.code === "auth/user-not-found") {
+        setError("No hay cuenta con este correo");
+      } else {
+        setError("Error al enviar el correo. Intenta de nuevo.");
+      }
+      triggerShake();
+    }
+    setSubmitting(false);
+  }
+
+  function handleKeyDown(e) {
+    setCapsOn(e.getModifierState?.("CapsLock") || false);
+  }
+
+  if (!isOpen) return null;
+
+  return (
+    <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 transition-opacity duration-300 ${isOpen ? "opacity-100" : "opacity-0 pointer-events-none"}`} onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+      <div className={`relative w-full max-w-sm transition-all duration-300 ${isOpen ? "opacity-100 scale-100" : "opacity-0 scale-95"}`} onClick={e => e.stopPropagation()}>
+        <div className="overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div className="h-1 bg-gradient-to-r from-red-600 to-cyan-600" />
+
+          <button onClick={onClose} className="absolute right-4 top-4 text-slate-400 hover:text-slate-600 transition-colors">
+            <X className="h-5 w-5" />
+          </button>
+
+          <div className="p-8">
+            <div className="mb-6 text-center">
+              <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-red-600 text-sm font-bold text-white">{APP_MONOGRAM}</span>
+              <h1 className="mt-3 text-lg font-bold text-slate-900">{APP_NAME}</h1>
+              <p className="text-sm text-slate-400">{showReset ? "Restablecer contrasena" : mode === "login" ? "Inicia sesion para continuar" : "Crea tu cuenta"}</p>
+            </div>
+
+            {resetSent ? (
+              <div className="text-center">
+                <span className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-600 text-lg font-bold text-white">✓</span>
+                <h2 className="mt-3 text-lg font-bold text-slate-900">Correo enviado</h2>
+                <p className="mt-2 text-sm text-slate-500">Revisa tu bandeja de entrada para restablecer tu contrasena.</p>
+                <button onClick={() => { setResetSent(false); setShowReset(false); setError(""); }} className="mt-6 text-sm text-blue-600 hover:underline font-medium">Volver al inicio de sesion</button>
+              </div>
+            ) : showReset ? (
+              <div className="space-y-4">
+                <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Tu correo electronico" type="email" required autoComplete="email"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all" />
+                {error && <p className={`text-xs text-red-500 ${shakeError ? "animate-shake" : ""}`}>{error}</p>}
+                <button onClick={handleReset} disabled={submitting}
+                  className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  {submitting ? "Enviando..." : "Enviar correo de recuperacion"}
+                </button>
+                <button type="button" onClick={() => { setShowReset(false); setError(""); }}
+                  className="w-full text-center text-xs text-slate-500 hover:text-slate-700">Volver</button>
+              </div>
+            ) : (
+              <form onSubmit={handleSubmit} className="space-y-4">
+                {mode === "signup" && (
+                  <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre" required
+                    className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all" />
+                )}
+                <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electronico" type="email" required autoComplete="email"
+                  className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all" />
+
+                <div className="relative">
+                  <input value={password} onChange={e => setPassword(e.target.value)} onKeyDown={handleKeyDown} onKeyUp={handleKeyDown}
+                    placeholder="Contrasena" type={showPwd ? "text" : "password"} required
+                    autoComplete={mode === "login" ? "current-password" : "new-password"}
+                    className={`w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-10 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all ${shakeError && error ? "border-red-300" : ""}`} />
+                  <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 hover:rotate-12 transition-all">
+                    {showPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+
+                {capsOn && (
+                  <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                    <span>Mayusculas activada</span>
+                  </div>
+                )}
+
+                {mode === "signup" && password.length > 0 && (
+                  <div>
+                    <div className="flex gap-1 mb-1">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className={`h-1 flex-1 rounded-full transition-all duration-300 ${i <= strengthConfig[strength].bars ? strengthConfig[strength].color : "bg-slate-200"}`} />
+                      ))}
+                    </div>
+                    <p className={`text-[10px] font-medium ${strength === "weak" ? "text-red-500" : strength === "medium" ? "text-amber-500" : "text-emerald-500"}`}>
+                      {strengthConfig[strength].label}
+                    </p>
+                  </div>
+                )}
+
+                {mode === "signup" && (
+                  <div className="relative">
+                    <input value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} onKeyDown={handleKeyDown} onKeyUp={handleKeyDown}
+                      placeholder="Confirmar contrasena" type={showConfirmPwd ? "text" : "password"} required autoComplete="new-password"
+                      className={`w-full rounded-xl border border-slate-200 px-4 py-2.5 pr-10 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all ${shakeError && error && password !== confirmPassword ? "border-red-300" : ""}`} />
+                    <button type="button" onClick={() => setShowConfirmPwd(!showConfirmPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 hover:rotate-12 transition-all">
+                      {showConfirmPwd ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                )}
+
+                {error && <p className={`text-xs text-red-500 ${shakeError ? "animate-shake" : ""}`}>{error}</p>}
+
+                <button type="submit" disabled={submitting || (mode === "signup" && strength === "weak")}
+                  className="w-full rounded-xl bg-slate-900 py-2.5 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-40 transition-all hover:scale-[1.02] active:scale-[0.98]">
+                  {submitting ? "..." : mode === "login" ? "Iniciar sesion" : "Crear cuenta"}
+                </button>
+
+                {mode === "login" && (
+                  <button type="button" onClick={() => setShowReset(true)}
+                    className="w-full text-center text-xs text-slate-400 hover:text-blue-600 transition-colors">
+                    Olvidaste tu contrasena?
+                  </button>
+                )}
+              </form>
+            )}
+
+            {!showReset && !resetSent && (
+              <p className="mt-4 text-center text-xs text-slate-500">
+                {mode === "login" ? "No tienes cuenta? " : "Ya tienes cuenta? "}
+                <button type="button" onClick={() => {
+                  const newMode = mode === "login" ? "signup" : "login";
+                  setMode(newMode);
+                  setError("");
+                  setPassword("");
+                  setConfirmPassword("");
+                  setShowPwd(false);
+                  setShowConfirmPwd(false);
+                }}
+                  className="text-blue-600 hover:underline font-medium">
+                  {mode === "login" ? "Crear cuenta" : "Iniciar sesion"}
+                </button>
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function LoginForm() {
   const { login, signup } = useAuth();
   const [mode, setMode] = useState("login");
@@ -2108,6 +2516,15 @@ export default function NoraHRKanban() {
   const [toast, setToast] = useState(null);
   const showToast = useCallback((msg) => setToast(msg), []);
   const [deletingId, setDeletingId] = useState(null);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+
+  function handleLoginSuccess() {
+    setShowLoginModal(false);
+    setShowLoadingScreen(true);
+    setTimeout(() => setShowLoadingScreen(false), 1500);
+  }
+
   const appUserLevel = isLocalDemo ? "manager" : (itConfig.jobTitleHierarchy || {})[appUserData?.jobTitle || ""] || "viewer";
   const appCanCreate = appIsAdmin || appRole === "manager" || appUserLevel === "manager" || appUserLevel === "admin";
   const appCanEdit = appCanCreate || appUserLevel === "editor";
@@ -2776,18 +3193,18 @@ export default function NoraHRKanban() {
     setCommentsOnly(false);
   }
 
-  if (loading) {
+  if (loading) return <LoadingScreen />;
+
+  if (showLoadingScreen) return <LoadingScreen />;
+
+  if (!appUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#f8f9fa]">
-        <div className="text-center">
-          <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-slate-300 border-t-slate-900" />
-          <p className="mt-3 text-sm text-slate-400">Cargando...</p>
-        </div>
-      </div>
+      <>
+        <LandingPage onOpenLogin={() => setShowLoginModal(true)} />
+        <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} onLoginSuccess={handleLoginSuccess} />
+      </>
     );
   }
-
-  if (!appUser) return <LoginForm />;
 
   return (
     <>
