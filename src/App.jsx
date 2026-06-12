@@ -1,4 +1,4 @@
-import React, { Component, useMemo, useState, useEffect, useRef, useCallback } from "react";
+import { Component, useMemo, useState, useEffect, useRef, useCallback } from "react";
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable, DragOverlay, pointerWithin, rectIntersection } from "@dnd-kit/core";
 import { SortableContext, sortableKeyboardCoordinates, useSortable, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -516,7 +516,7 @@ function CardContent({ task, onTaskPatch, isAdmin, users }) {
   );
 }
 
-function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, onTaskPatch, isLocal, users, deletingId, index = 0 }) {
+function SortableCard({ task, onSelect, isAdmin, deleteMode, onDelete, onTaskPatch, isLocal, users, deletingId, index = 0 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id, disabled: !isAdmin || deleteMode });
   const s = { transform: CSS.Transform.toString(transform), transition };
 
@@ -569,7 +569,7 @@ function SortableCard({ task, onSelect, isAdmin, userMap, deleteMode, onDelete, 
   );
 }
 
-function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, userMap, onAdd, onTaskPatch, isLocal, users, deletingId }) {
+function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode, onSelect, onDelete, onAdd, onTaskPatch, isLocal, users, deletingId }) {
   const { setNodeRef, isOver } = useDroppable({ id: `column-${status}`, disabled: !isAdmin || deleteMode });
   const colDone = items.filter(t => t.status === "Hecho").length;
   const colTotal = items.length;
@@ -630,7 +630,7 @@ function Column({ status, items, collapsed, toggleCollapse, isAdmin, deleteMode,
               </div>
             ) : (
               <div className="space-y-1.5">
-                {items.map((t, i) => <SortableCard key={t.id} task={t} index={i} onSelect={onSelect} isAdmin={isAdmin} userMap={userMap} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} deletingId={deletingId} />)}
+                {items.map((t, i) => <SortableCard key={t.id} task={t} index={i} onSelect={onSelect} isAdmin={isAdmin} deleteMode={deleteMode} onDelete={onDelete} onTaskPatch={onTaskPatch} isLocal={isLocal} users={users} deletingId={deletingId} />)}
                 {isAdmin && <DroppableZone status={status} />}
               </div>
             )}
@@ -2281,410 +2281,7 @@ function LoginModal({ isOpen, onClose, onLoginSuccess }) {
   );
 }
 
-function LoginForm() {
-  const { login, signup } = useAuth();
-  const [mode, setMode] = useState("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [error, setError] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
-  const [showReset, setShowReset] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
 
-  useEffect(() => {
-    function onKeyDown(e) {
-      if (e.key === "Escape") setModalOpen(false);
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
-
-  function openModal(nextMode = "login") {
-    setMode(nextMode);
-    setShowReset(false);
-    setResetSent(false);
-    setError("");
-    setModalOpen(true);
-  }
-
-  function switchMode() {
-    setMode(mode === "login" ? "signup" : "login");
-    setShowReset(false);
-    setResetSent(false);
-    setError("");
-  }
-
-  async function handleSubmit(e) {
-    e.preventDefault();
-    setError("");
-    setSubmitting(true);
-    try {
-      if (mode === "login") {
-        await login(email, password);
-      } else {
-        await signup(email, password, name);
-      }
-    } catch (err) {
-      if (err.code === "auth/user-not-found" || err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
-        setError("Correo o contraseña incorrectos");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Este correo ya está registrado");
-      } else if (err.code === "auth/weak-password") {
-        setError("La contraseña debe tener al menos 6 caracteres");
-      } else if (err.code === "auth/invalid-email") {
-        setError("Correo electrónico inválido");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Demasiados intentos. Intenta de nuevo más tarde.");
-      } else if (err.code === "auth/network-request-failed") {
-        setError("Error de conexión. Verifica tu internet.");
-      } else if (err.code === "auth/user-disabled") {
-        setError("Esta cuenta ha sido deshabilitada.");
-      } else {
-        setError("Error al iniciar sesión. Verifica tus credenciales.");
-      }
-    }
-    setSubmitting(false);
-  }
-
-  async function handleReset() {
-    if (!email.trim()) { setError("Ingresa tu correo primero"); return; }
-    setSubmitting(true);
-    setError("");
-    try {
-      const { sendPasswordResetEmail } = await import("firebase/auth");
-      const { auth } = await import("./firebase");
-      await sendPasswordResetEmail(auth, email.trim());
-      setResetSent(true);
-    } catch (err) {
-      if (err.code === "auth/user-not-found") {
-        setError("No hay cuenta con este correo");
-      } else {
-        setError("Error al enviar el correo. Intenta de nuevo.");
-      }
-    }
-    setSubmitting(false);
-  }
-
-  const fieldClass = "h-10 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 text-xs font-semibold text-slate-800 outline-none transition-all placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:ring-4 focus:ring-slate-900/5";
-  const features = [
-    { icon: LayoutDashboard, title: "Kanban operativo", copy: "Flujo diario, responsables y prioridad visual." },
-    { icon: BarChart3, title: "Gantt y reportes", copy: "Fechas, SLA y métricas para decisiones rápidas." },
-    { icon: CheckCircle2, title: "Checklist por tarea", copy: "Cierre controlado y seguimiento claro." },
-    { icon: ListFilter, title: "Filtros IT", copy: "Sistema, tipo, urgencia, estado y responsable." },
-  ];
-  const liveMetrics = [
-    ["Vencidas", "07", "text-red-600", "bg-red-50"],
-    ["SLA activo", "94%", "text-cyan-700", "bg-cyan-50"],
-    ["Bloqueadas", "03", "text-amber-700", "bg-amber-50"],
-    ["Cierre", "12", "text-emerald-700", "bg-emerald-50"],
-  ];
-  const boardColumns = [
-    {
-      label: "Pendiente",
-      dot: "bg-slate-300",
-      cards: [
-        ["M365 license audit", "Microsoft 365", "Alta", "4h"],
-        ["Rack DTC power check", "Infra", "Media", "24h"],
-      ],
-    },
-    {
-      label: "En progreso",
-      dot: "bg-cyan-500",
-      cards: [
-        ["UPS maintenance", "Facilities", "Crítica", "2h"],
-        ["Firewall policy review", "Network", "Alta", "8h"],
-      ],
-    },
-    {
-      label: "Listo",
-      dot: "bg-emerald-500",
-      cards: [
-        ["SSL renewal", "ReqLogic", "Media", "OK"],
-        ["AP Blue Room install", "WiFi", "Baja", "OK"],
-      ],
-    },
-  ];
-  const activityFeed = [
-    ["MG", "Asignó UPS maintenance", "hace 4m"],
-    ["ER", "Actualizó SLA crítico", "hace 12m"],
-    ["IT", "Checklist 5/6 completado", "hace 18m"],
-  ];
-
-  return (
-    <div className="relative min-h-screen overflow-hidden bg-white font-sans text-slate-950">
-      <div
-        className="pointer-events-none fixed inset-0 opacity-70"
-        style={{
-          backgroundImage: "linear-gradient(to right, #f4f4f5 1px, transparent 1px), linear-gradient(to bottom, #f4f4f5 1px, transparent 1px)",
-          backgroundSize: "30px 30px",
-        }}
-      />
-
-      <header className="login-rise relative z-10 mx-auto flex w-full max-w-7xl items-center justify-between px-5 py-4 md:px-6">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-[11px] font-black text-white shadow-sm">{APP_MONOGRAM}</span>
-          <div>
-            <p className="text-sm font-black tracking-tight text-slate-950 md:text-base">{APP_NAME}</p>
-            <p className="hidden text-[10px] font-bold uppercase tracking-wide text-slate-400 sm:block">IT operations workspace</p>
-          </div>
-        </div>
-        <button
-          onClick={() => openModal("login")}
-          className="flex h-9 items-center gap-2 rounded-xl bg-slate-950 px-3.5 text-xs font-black text-white shadow-lg shadow-slate-950/10 transition-colors hover:bg-black"
-        >
-          <User className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Ingresar</span>
-        </button>
-      </header>
-
-      <main className="relative z-10 mx-auto grid w-full max-w-7xl grid-cols-1 items-center gap-8 px-5 pb-10 pt-6 md:grid-cols-[minmax(0,0.82fr)_minmax(520px,1fr)] md:px-6 md:pt-10">
-        <section className="login-rise max-w-xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white/90 px-3 py-1.5 text-[11px] font-black uppercase tracking-wide text-slate-500 shadow-sm backdrop-blur">
-            <ShieldCheck className="h-3.5 w-3.5 text-red-600" />
-            Workspace privado para IT
-          </div>
-          <h1 className="max-w-xl text-4xl font-black leading-[1.02] tracking-tight text-slate-950 md:text-6xl">
-            Operación IT bajo control, sin perder el <span className="text-red-600">SLA.</span>
-          </h1>
-          <p className="mt-5 max-w-md text-sm font-medium leading-7 text-slate-500">
-            Kanban, Gantt, checklist y reportes en una sola vista para managers que asignan, desbloquean y cierran trabajo todos los días.
-          </p>
-          <div className="mt-5 grid max-w-md grid-cols-2 gap-2">
-            {liveMetrics.map(([label, value, text, bg]) => (
-              <div key={label} className="rounded-2xl border border-slate-200 bg-white/85 p-3 shadow-sm backdrop-blur">
-                <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">{label}</p>
-                <p className={`mt-1 text-2xl font-black ${text}`}>{value}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-6 flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => openModal("login")}
-              className="flex h-10 items-center gap-2 rounded-xl bg-red-600 px-4 text-xs font-black text-white shadow-lg shadow-red-600/20 transition-all hover:-translate-y-0.5 hover:bg-red-700"
-            >
-              <KeyRound className="h-4 w-4" />
-              Acceder al workspace
-            </button>
-            <button
-              onClick={() => openModal("signup")}
-              className="h-10 rounded-xl border border-slate-200 bg-white px-4 text-xs font-black text-slate-700 shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-50"
-            >
-              Crear cuenta
-            </button>
-          </div>
-        </section>
-
-        <section className="login-rise relative">
-          <div className="absolute right-3 top-3 hidden rounded-2xl border border-red-100 bg-white/95 px-4 py-3 shadow-xl shadow-red-100/60 backdrop-blur md:block login-float">
-            <p className="text-[10px] font-black uppercase tracking-wide text-slate-400">Cierre pendiente</p>
-            <p className="mt-1 flex items-center gap-2 text-sm font-black text-red-600"><Flame className="h-4 w-4" /> 5 tareas críticas</p>
-          </div>
-          <div className="rounded-[28px] border border-slate-200 bg-white/90 p-4 shadow-2xl shadow-slate-200/80 backdrop-blur-xl">
-            <div className="mb-4 flex items-center justify-between px-1">
-              <div className="flex gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-black uppercase text-slate-500">Live board</span>
-                <span className="hidden rounded-full bg-cyan-50 px-2 py-1 text-[10px] font-black uppercase text-cyan-700 sm:inline">Gantt sync</span>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-3">
-              {boardColumns.map(({ label, dot, cards }, colIdx) => (
-                <div key={label} className="space-y-2">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
-                    <span className="truncate text-[9px] font-black uppercase text-slate-500">{label}</span>
-                  </div>
-                  {cards.map(([card, system, priority, sla], idx) => (
-                    <div
-                      key={card}
-                      className={`login-card-shift min-h-[82px] rounded-xl border bg-white p-2 shadow-sm transition-all hover:-translate-y-1 hover:shadow-lg ${idx === 0 && label === "En progreso" ? "rotate-[-1deg] border-cyan-100 ring-1 ring-cyan-500/10" : "border-slate-100"}`}
-                      style={{ animationDelay: `${(colIdx * 2 + idx) * 90}ms` }}
-                    >
-                      <div className="mb-1 flex items-start justify-between gap-2">
-                        <p className="line-clamp-2 text-[11px] font-black leading-snug text-slate-800">{card}</p>
-                        <span className="h-5 w-5 shrink-0 rounded-full bg-slate-100" />
-                      </div>
-                      <p className="truncate text-[9px] font-bold uppercase text-slate-400">{system}</p>
-                      <div className="mt-2 flex flex-wrap gap-1">
-                        <span className={`rounded-md px-1.5 py-1 text-[9px] font-black ${priority === "Crítica" ? "bg-red-50 text-red-600" : priority === "Alta" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}>{priority}</span>
-                        <span className="rounded-md bg-cyan-50 px-1.5 py-1 text-[9px] font-black text-cyan-700">{sla}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-[1fr_180px]">
-              <div className="rounded-2xl border border-slate-100 bg-slate-50/80 p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[10px] font-black uppercase tracking-wide text-slate-500">Timeline SLA</p>
-                  <Clock3 className="h-3.5 w-3.5 text-cyan-600" />
-                </div>
-                {[
-                  ["UPS", "w-[78%]", "bg-red-500"],
-                  ["M365", "w-[54%]", "bg-cyan-500"],
-                  ["WiFi", "w-[35%]", "bg-emerald-500"],
-                ].map(([label, width, color]) => (
-                  <div key={label} className="mb-2 grid grid-cols-[42px_1fr] items-center gap-2 last:mb-0">
-                    <span className="text-[10px] font-black text-slate-500">{label}</span>
-                    <span className="h-2 rounded-full bg-white">
-                      <span className={`block h-2 rounded-full ${width} ${color} login-pulse`} />
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                <p className="mb-2 text-[10px] font-black uppercase tracking-wide text-slate-500">Actividad</p>
-                <div className="space-y-2">
-                  {activityFeed.map(([who, action, time]) => (
-                    <div key={action} className="flex items-center gap-2">
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-950 text-[9px] font-black text-white">{who}</span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[10px] font-black text-slate-700">{action}</span>
-                        <span className="block text-[9px] font-semibold text-slate-400">{time}</span>
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      </main>
-
-      <section className="login-rise relative z-10 mx-auto w-full max-w-7xl px-5 pb-16 md:px-6">
-        <div className="mb-5 flex flex-col justify-between gap-3 md:flex-row md:items-end">
-          <div>
-            <h2 className="text-xl font-black text-slate-950">Arquitectura del sistema</h2>
-            <p className="mt-1 text-xs font-semibold text-slate-400">Las piezas clave para administrar operación IT sin ruido.</p>
-          </div>
-          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[10px] font-black uppercase text-slate-500 shadow-sm">
-            <MonitorCheck className="h-3.5 w-3.5 text-emerald-600" />
-            Firebase secure workspace
-          </div>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {features.map(({ icon: Icon, title, copy }, idx) => (
-            <button
-              key={title}
-              type="button"
-              onClick={() => openModal(idx === 0 ? "login" : "signup")}
-              className={`group min-h-[132px] rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg ${idx === 0 ? "sm:col-span-2 lg:col-span-1" : ""}`}
-            >
-              <span className={`mb-4 flex h-8 w-8 items-center justify-center rounded-xl ${idx === 0 ? "bg-slate-950 text-white" : idx === 1 ? "bg-cyan-50 text-cyan-600" : idx === 2 ? "bg-red-50 text-red-600" : "bg-slate-100 text-slate-700"}`}>
-                <Icon className="h-4 w-4" />
-              </span>
-              <h3 className="text-sm font-black text-slate-950">{title}</h3>
-              <p className="mt-1.5 text-xs font-medium leading-5 text-slate-500">{copy}</p>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <div
-        className={`fixed inset-0 z-50 flex items-center justify-center bg-white/65 p-4 backdrop-blur-md transition-all duration-200 ${modalOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}
-        onMouseDown={(e) => {
-          if (e.target === e.currentTarget) setModalOpen(false);
-        }}
-      >
-        <div className={`w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-6 shadow-2xl shadow-slate-300/60 transition-all duration-200 ${modalOpen ? "translate-y-0 scale-100" : "-translate-y-2 scale-[0.98]"}`}>
-          <div className="mb-6 flex items-start justify-between gap-4">
-            <div>
-              <span className="mb-3 flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-white">
-                {resetSent ? <CheckCircle2 className="h-4 w-4" /> : <Lock className="h-4 w-4" />}
-              </span>
-              <h2 className="text-lg font-black text-slate-950">
-                {resetSent ? "Correo enviado" : showReset ? "Recuperar acceso" : mode === "login" ? "Bienvenido" : "Crear cuenta"}
-              </h2>
-              <p className="mt-1 text-xs font-semibold text-slate-400">
-                {resetSent ? "Revisa tu bandeja de entrada." : showReset ? "Te enviaremos un link seguro." : mode === "login" ? `Accede a ${APP_NAME}` : "El acceso final depende de permisos del admin."}
-              </p>
-            </div>
-            <button onClick={() => setModalOpen(false)} className="flex h-8 w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-900">
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {resetSent ? (
-            <div className="space-y-4">
-              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-xs font-semibold leading-5 text-emerald-700">
-                Si el correo existe, Firebase enviará instrucciones para restablecer la contraseña.
-              </div>
-              <button onClick={() => { setResetSent(false); setShowReset(false); setError(""); }} className="h-10 w-full rounded-xl bg-slate-950 text-xs font-black text-white transition-colors hover:bg-black">
-                Volver al inicio de sesión
-              </button>
-            </div>
-          ) : showReset ? (
-            <div className="space-y-3">
-              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" type="email" required autoComplete="email" className={fieldClass} />
-              {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{error}</p>}
-              <button onClick={handleReset} disabled={submitting} className="h-10 w-full rounded-xl bg-slate-950 text-xs font-black text-white transition-colors hover:bg-black disabled:opacity-40">
-                {submitting ? "Enviando..." : "Enviar recuperación"}
-              </button>
-              <button type="button" onClick={() => { setShowReset(false); setError(""); }} className="h-9 w-full rounded-xl text-xs font-black text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800">
-                Volver
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-3">
-              {mode === "signup" && (
-                <input value={name} onChange={e => setName(e.target.value)} placeholder="Nombre completo" required autoComplete="name" className={fieldClass} />
-              )}
-              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="Correo electrónico" type="email" required autoComplete="email" className={fieldClass} />
-              <div className="relative">
-                <input
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="Contraseña"
-                  type={showPassword ? "text" : "password"}
-                  required
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
-                  className={`${fieldClass} pr-10`}
-                />
-                <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-2 top-1/2 flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white hover:text-slate-900">
-                  {showPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                </button>
-              </div>
-              <div className="flex items-center justify-between py-1">
-                <label className="flex items-center gap-2 text-[10px] font-bold text-slate-500">
-                  <input type="checkbox" className="h-3.5 w-3.5 rounded border-slate-300 text-slate-950 focus:ring-slate-900" />
-                  Recordarme
-                </label>
-                {mode === "login" && (
-                  <button type="button" onClick={() => { setShowReset(true); setError(""); }} className="text-[10px] font-black text-red-600 hover:text-red-700">
-                    ¿Olvidaste tu clave?
-                  </button>
-                )}
-              </div>
-              {mode === "signup" && (
-                <p className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[10px] font-semibold leading-5 text-slate-500">
-                  La cuenta se crea como miembro. Un admin debe asignar permisos y boards.
-                </p>
-              )}
-              {error && <p className="rounded-xl bg-red-50 px-3 py-2 text-xs font-bold text-red-600">{error}</p>}
-              <button type="submit" disabled={submitting} className="flex h-10 w-full items-center justify-center rounded-xl bg-slate-950 text-xs font-black text-white transition-colors hover:bg-black disabled:opacity-40">
-                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : mode === "login" ? "Iniciar sesión" : "Crear cuenta"}
-              </button>
-              <p className="pt-1 text-center text-xs font-semibold text-slate-500">
-                {mode === "login" ? "¿No tienes cuenta? " : "¿Ya tienes cuenta? "}
-                <button type="button" onClick={switchMode} className="font-black text-red-600 hover:text-red-700">
-                  {mode === "login" ? "Crear cuenta" : "Iniciar sesión"}
-                </button>
-              </p>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function AdminPanel({ users, currentUser, onClose, itConfig = defaultItConfig }) {
   const [updating, setUpdating] = useState({});
@@ -2923,12 +2520,6 @@ export default function NoraHRKanban() {
     );
     return unsub;
   }, [user, userData, appIsAdmin, isLocalDemo]);
-
-  const userMap = useMemo(() => {
-    const m = {};
-    users.forEach(u => { m[u.id] = u; });
-    return m;
-  }, [users]);
 
   const localCommentTaskIds = useMemo(() => {
     if (!isLocalDemo) return new Set();
@@ -3673,22 +3264,18 @@ export default function NoraHRKanban() {
               <select value={phase} onChange={e => setPhase(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
                 {["Todas", ...phaseOptions].map(p => <option key={p} value={p}>{p === "Todas" ? "Fases" : phaseMap[p] ? `${p} - ${phaseMap[p]}` : p}</option>)}
               </select>
-              {isLocalDemo && (
-                <>
-                  <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Sistemas</option>{systemOptions.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
-                  <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Tipos</option>{typeOptions.map(v => <option key={v} value={v}>{v}</option>)}
-                  </select>
-                  <select value={slaFilter} onChange={e => setSlaFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">SLA</option><option value="Con SLA">Con SLA</option><option value="Sin SLA">Sin SLA</option><option value="Vencidas">Vencidas</option>
-                  </select>
-                  <select value={responsibleFilter} onChange={e => setResponsibleFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
-                    <option value="Todos">Responsable</option>{responsibleOptions.map(v => <option key={v} value={v}>{displayPersonName(v)}</option>)}
-                  </select>
-                </>
-              )}
+              <select value={systemFilter} onChange={e => setSystemFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                <option value="Todos">Sistemas</option>{systemOptions.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <select value={typeFilter} onChange={e => setTypeFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                <option value="Todos">Tipos</option>{typeOptions.map(v => <option key={v} value={v}>{v}</option>)}
+              </select>
+              <select value={slaFilter} onChange={e => setSlaFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                <option value="Todos">SLA</option><option value="Con SLA">Con SLA</option><option value="Sin SLA">Sin SLA</option><option value="Vencidas">Vencidas</option>
+              </select>
+              <select value={responsibleFilter} onChange={e => setResponsibleFilter(e.target.value)} className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none">
+                <option value="Todos">Responsable</option>{responsibleOptions.map(v => <option key={v} value={v}>{displayPersonName(v)}</option>)}
+              </select>
             </div>
           </div>
 
@@ -3755,7 +3342,7 @@ export default function NoraHRKanban() {
               ) : (
                 <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
                   {columns.map(({ status, items }) => (
-                    <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appCanEdit} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} userMap={userMap} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
+                    <Column key={status} status={status} items={items} collapsed={collapsed} toggleCollapse={toggleCollapse} isAdmin={appCanEdit} deleteMode={deleteMode} onSelect={setDetailT} onDelete={deleteTask} onAdd={openAddTask} onTaskPatch={patchTask} isLocal={isLocalDemo} users={users} deletingId={deletingId} />
                   ))}
                 </div>
               )}

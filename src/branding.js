@@ -1,4 +1,4 @@
-export const APP_NAME = "Kanban IT Departament";
+export const APP_NAME = "Kanban IT Department";
 export const APP_MONOGRAM = "IT";
 
 const LEGACY_BOARD_NAMES = new Set([
