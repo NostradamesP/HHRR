@@ -749,14 +749,15 @@ export default function NoraHRKanban() {
         impact: f.impact || "",
         urgency: f.urgency || "",
         slaHours: f.slaHours || "",
-        checklist: f.checklist || makeChecklist(f.title),
-        commentsCount: 0,
-        operationalState: f.operationalState || "normal",
-        blockedReason: f.blockedReason || "",
-        createdBy: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+          checklist: f.checklist || makeChecklist(f.title),
+          commentsCount: 0,
+          operationalState: f.operationalState || "normal",
+          blockedReason: f.blockedReason || "",
+          attachments: [],
+          createdBy: user.uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
       createLog(ref.id, f.title, "created", "");
       setShowAdd(false);
       setNewTaskStatus("Pendiente");

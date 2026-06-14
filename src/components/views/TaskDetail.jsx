@@ -85,6 +85,7 @@ export default function TaskDetail({
   const [newChecklistText, setNewChecklistText] = useState("");
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadError, setUploadError] = useState("");
   const { user, userData } = useAuth();
   const isLocalDetailDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const detailUser =
@@ -327,20 +328,28 @@ export default function TaskDetail({
   async function handleUploadFile(e) {
     const file = e.target?.files?.[0];
     if (!file) return;
+    setUploadError("");
+    // Local mode size limit
+    if (isLocalDetailDemo && file.size > 4 * 1024 * 1024) {
+      setUploadError("El archivo es demasiado grande para modo local (máx 4 MB)");
+      if (e.target) e.target.value = "";
+      return;
+    }
     setUploading(true);
     setUploadProgress(0);
     try {
       const attachment = isLocalDetailDemo
         ? await uploadLocalAttachment(file)
         : await uploadFirebaseAttachment(file);
-      const updated = [...existingAttachments, attachment];
+      const currentAttachments = task.attachments || [];
+      const updated = [...currentAttachments, attachment];
       onTaskPatch?.(task.id, { attachments: updated });
     } catch (err) {
       console.error("Upload error:", err);
+      setUploadError("Error al subir el archivo. Intenta de nuevo.");
     } finally {
       setUploading(false);
       setUploadProgress(0);
-      // Reset input so the same file can be re-selected
       if (e.target) e.target.value = "";
     }
   }
@@ -918,6 +927,11 @@ export default function TaskDetail({
                         </label>
                       )}
                     </div>
+                    {uploadError && (
+                      <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700">
+                        {uploadError}
+                      </div>
+                    )}
                     {existingAttachments.length === 0 ? (
                       <p className="text-sm text-slate-400">Sin archivos adjuntos.</p>
                     ) : (
