@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Flame,
   User,
+  Paperclip,
 } from "lucide-react";
 import { priorityMeta, operationalStates, modColors } from "../../constants/meta";
 import {
@@ -91,6 +92,11 @@ export default function CardContent({ task }) {
         {Number(task.commentsCount || 0) > 0 && (
           <CardBadge icon={MessageSquare} className="border-slate-200 bg-slate-50 text-slate-600">
             {task.commentsCount}
+          </CardBadge>
+        )}
+        {Array.isArray(task.attachments) && task.attachments.length > 0 && (
+          <CardBadge icon={Paperclip} className="border-slate-200 bg-slate-50 text-slate-600">
+            {task.attachments.length}
           </CardBadge>
         )}
         {task.dueDate && <DueDateBadge dueDate={task.dueDate} />}

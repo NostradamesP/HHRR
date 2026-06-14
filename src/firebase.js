@@ -1,11 +1,13 @@
 import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
+import { getStorage } from "firebase/storage";
 
 const isLocal = ["localhost", "127.0.0.1"].includes(window.location.hostname);
 
 let auth = null;
 let db = null;
+let storage = null;
 
 if (!isLocal) {
   const firebaseConfig = {
@@ -29,6 +31,7 @@ if (!isLocal) {
   const app = initializeApp(firebaseConfig);
   auth = getAuth(app);
   db = getFirestore(app);
+  storage = getStorage(app);
 }
 
-export { auth, db };
+export { auth, db, storage };

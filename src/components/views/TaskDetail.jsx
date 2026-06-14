@@ -12,7 +12,8 @@ import {
   increment,
   limit,
 } from "firebase/firestore";
-import { db } from "../../firebase";
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
+import { db, storage } from "../../firebase";
 import { useAuth } from "../../AuthContext";
 import {
   Circle,
@@ -30,6 +31,9 @@ import {
   User,
   MoreVertical,
   Send,
+  Upload,
+  FileText,
+  Loader2,
 } from "lucide-react";
 import {
   statuses,
@@ -47,8 +51,10 @@ import {
   writeLocalJSON,
   cleanValue,
   displayPersonName,
+  fileToBase64,
+  formatFileSize,
 } from "../../lib/utils";
-import { LOCAL_COMMENTS_KEY, LOCAL_LOGS_KEY } from "../../constants/storage";
+import { LOCAL_COMMENTS_KEY, LOCAL_LOGS_KEY, LOCAL_ATTACHMENTS_KEY } from "../../constants/storage";
 import EditableCombo from "../ui/EditableCombo";
 import Avatar from "../ui/Avatar";
 import FieldPill from "../ui/FieldPill";
@@ -77,6 +83,8 @@ export default function TaskDetail({
   const [commentText, setCommentText] = useState("");
   const [activeTab, setActiveTab] = useState("details");
   const [newChecklistText, setNewChecklistText] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const { user, userData } = useAuth();
   const isLocalDetailDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const detailUser =
@@ -311,6 +319,67 @@ export default function TaskDetail({
 
   function removeChecklistItem(id) {
     patchChecklist((task.checklist || []).filter((item) => item.id !== id));
+  }
+
+  // ── Attachments ────────────────────────────────────────
+  const existingAttachments = task.attachments || [];
+
+  async function handleUploadFile(e) {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadProgress(0);
+    try {
+      const attachment = isLocalDetailDemo
+        ? await uploadLocalAttachment(file)
+        : await uploadFirebaseAttachment(file);
+      const updated = [...existingAttachments, attachment];
+      onTaskPatch?.(task.id, { attachments: updated });
+    } catch (err) {
+      console.error("Upload error:", err);
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+      // Reset input so the same file can be re-selected
+      if (e.target) e.target.value = "";
+    }
+  }
+
+  async function uploadFirebaseAttachment(file) {
+    const path = `boards/${activeBoardId}/tasks/${task.id}/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, path);
+    const snapshot = await uploadBytesResumable(storageRef, file);
+    const url = await getDownloadURL(snapshot.ref);
+    return { name: file.name, url, path, type: file.type, size: file.size, uploadedAt: Date.now() };
+  }
+
+  async function uploadLocalAttachment(file) {
+    const dataUrl = await fileToBase64(file);
+    const all = readLocalJSON(LOCAL_ATTACHMENTS_KEY, {});
+    const id = `attach-${Date.now()}`;
+    all[id] = dataUrl;
+    writeLocalJSON(LOCAL_ATTACHMENTS_KEY, all);
+    return { id, name: file.name, url: dataUrl, path: `local:${id}`, type: file.type, size: file.size, uploadedAt: Date.now() };
+  }
+
+  async function handleDeleteAttachment(attachment) {
+    if (!isAdmin) return;
+    const ok = confirm(`¿Eliminar "${attachment.name}"?`);
+    if (!ok) return;
+    try {
+      if (!isLocalDetailDemo) {
+        try { await deleteObject(ref(storage, attachment.path)); } catch { /* already gone */ }
+      } else {
+        const all = readLocalJSON(LOCAL_ATTACHMENTS_KEY, {});
+        const localId = attachment.path?.replace("local:", "");
+        if (localId) delete all[localId];
+        writeLocalJSON(LOCAL_ATTACHMENTS_KEY, all);
+      }
+      const updated = existingAttachments.filter((a) => a.path !== attachment.path);
+      onTaskPatch?.(task.id, { attachments: updated });
+    } catch (err) {
+      console.error("Delete error:", err);
+    }
   }
 
   function goToSection(id, tab = "details") {
@@ -812,6 +881,79 @@ export default function TaskDetail({
                         </div>
                       )}
                     </div>
+                  </section>
+
+                  <section
+                    id="task-attachments"
+                    className="scroll-mt-4 border-t border-slate-200 pt-5"
+                  >
+                    <div className="mb-3 flex items-center justify-between">
+                      <h3 className="text-lg font-black text-slate-900">
+                        Archivos
+                        {existingAttachments.length > 0 && (
+                          <span className="ml-2 rounded-full bg-slate-200 px-2 py-0.5 text-xs font-bold text-slate-500">
+                            {existingAttachments.length}
+                          </span>
+                        )}
+                      </h3>
+                      {isAdmin && (
+                        <label className="flex cursor-pointer items-center gap-1.5 rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-cyan-600 hover:text-white disabled:opacity-50">
+                          {uploading ? (
+                            <>
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                              {uploadProgress}%
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-3.5 w-3.5" />
+                              Subir
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            className="hidden"
+                            disabled={uploading}
+                            onChange={handleUploadFile}
+                          />
+                        </label>
+                      )}
+                    </div>
+                    {existingAttachments.length === 0 ? (
+                      <p className="text-sm text-slate-400">Sin archivos adjuntos.</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {existingAttachments.map((att, idx) => (
+                          <div
+                            key={att.path || idx}
+                            className="flex items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                          >
+                            <FileText className="h-5 w-5 shrink-0 text-slate-400" />
+                            <a
+                              href={att.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-700 hover:text-cyan-600 hover:underline"
+                              title={att.name}
+                            >
+                              {att.name}
+                            </a>
+                            <span className="shrink-0 text-xs text-slate-400">
+                              {formatFileSize(att.size)}
+                            </span>
+                            {isAdmin && (
+                              <button
+                                onClick={() => handleDeleteAttachment(att)}
+                                disabled={uploading}
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                title="Eliminar archivo"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </section>
 
                   <section
