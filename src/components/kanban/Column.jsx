@@ -41,7 +41,7 @@ export default function Column({
         <div className="flex items-center gap-2">
           <button
             onClick={() => toggleCollapse(status)}
-            className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
+            className="flex h-8 w-8 md:h-6 md:w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
           >
             {collapsed[status] ? (
               <ChevronRight className="h-4 w-4" />
@@ -64,7 +64,7 @@ export default function Column({
           {isAdmin && (
             <button
               onClick={() => onAdd(status)}
-              className="flex h-6 w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-cyan-600"
+              className="flex h-8 w-8 md:h-6 md:w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-cyan-600"
             >
               <Plus className="h-4 w-4" />
             </button>
@@ -99,7 +99,7 @@ export default function Column({
                 {isAdmin && (
                   <button
                     onClick={() => onAdd(status)}
-                    className="mt-2 text-xs font-bold text-cyan-600 hover:text-cyan-700 transition-colors"
+                    className="mt-2 rounded-lg px-3 py-2 md:px-0 md:py-0 text-xs font-bold text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 md:hover:bg-transparent transition-colors"
                   >
                     Agregar primera tarea
                   </button>

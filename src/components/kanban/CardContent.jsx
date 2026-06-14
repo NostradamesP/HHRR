@@ -41,9 +41,9 @@ export default function CardContent({ task }) {
   }
 
   return (
-    <div className="space-y-1.5">
-      <div className="flex items-start justify-between gap-2">
-        <h3 className="flex min-w-0 flex-1 items-start gap-1.5 pr-6 text-[13px] font-bold leading-snug text-slate-950">
+    <div className="space-y-1 md:space-y-1.5">
+      <div className="flex items-start justify-between gap-1.5 md:gap-2">
+        <h3 className="flex min-w-0 flex-1 items-start gap-1 md:gap-1.5 pr-4 md:pr-6 text-xs md:text-[13px] font-bold leading-snug text-slate-950">
           <PriorityIcon className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${meta.tone.split(" ")[0]}`} />
           <span className="line-clamp-2">{task.title}</span>
           {isBlocked && <Lock className="mt-0.5 h-3 w-3 shrink-0 text-red-500" />}

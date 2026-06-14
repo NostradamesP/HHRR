@@ -47,16 +47,16 @@ export default function SortableCard({
       {...attributes}
       {...listeners}
       onClick={openCard}
-      className={`group relative rounded-lg border border-slate-200/80 bg-white px-2.5 py-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300 opacity-40" : "opacity-0-initial animate-fade-in-up hover:border-slate-300 hover:shadow-md"}`}
+      className={`group relative rounded-lg border border-slate-200/80 bg-white px-2 md:px-2.5 py-1.5 md:py-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300 opacity-40" : "opacity-0-initial animate-fade-in-up hover:border-slate-300 hover:shadow-md"}`}
     >
       {isAdmin && !deleteMode && (
         <button
           type="button"
           aria-label="Arrastrar tarea"
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-1 top-1 z-10 flex h-5 w-5 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
+          className="absolute right-0.5 top-0.5 z-10 flex h-7 w-7 md:h-5 md:w-5 items-center justify-center rounded-md text-slate-300 hover:bg-slate-100 hover:text-slate-600"
         >
-          <MoreVertical className="h-3 w-3" />
+          <MoreVertical className="h-3.5 w-3.5 md:h-3 md:w-3" />
         </button>
       )}
       {deleteMode && isAdmin && (
@@ -68,9 +68,9 @@ export default function SortableCard({
             }
           }}
           disabled={deletingId === task.id}
-          className="absolute -right-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 disabled:opacity-40 transition-colors"
+          className="absolute -right-1.5 -top-1.5 z-10 flex h-8 w-8 md:h-6 md:w-6 items-center justify-center rounded-full bg-red-500 text-white shadow hover:bg-red-600 disabled:opacity-40 transition-colors"
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="h-4 w-4 md:h-3.5 md:w-3.5" />
         </button>
       )}
       <CardContent task={task} />

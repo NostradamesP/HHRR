@@ -1032,7 +1032,7 @@ export default function NoraHRKanban() {
         onDragEnd={handleDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <div className="min-h-screen bg-slate-200/60">
+        <div className="min-h-screen bg-slate-200/60 pb-20 md:pb-0">
           <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur-md">
             <div className="mx-auto flex max-w-[1800px] items-center gap-3 px-3 py-1.5 md:px-3">
               <div className="flex min-w-0 items-center gap-2">
@@ -1168,12 +1168,17 @@ export default function NoraHRKanban() {
                 <div className="relative md:hidden">
                   <button
                     onClick={() => setShowMobileMenu(!showMobileMenu)}
-                    className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
+                    className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
                   >
-                    <SlidersHorizontal className="h-4 w-4" />
+                    <SlidersHorizontal className="h-5 w-5" />
                   </button>
                   {showMobileMenu && (
-                    <div className="absolute right-0 top-full mt-1 w-48 rounded-xl border border-slate-200 bg-white shadow-xl p-2 space-y-1 z-50">
+                    <>
+                      <div
+                        className="fixed inset-0 z-40 bg-slate-950/20 md:hidden"
+                        onClick={() => setShowMobileMenu(false)}
+                      />
+                      <div className="fixed inset-x-0 bottom-0 z-50 rounded-t-2xl border-t border-slate-200 bg-white shadow-2xl p-3 pb-8 space-y-1 animate-in slide-in-from-bottom duration-200 md:absolute md:right-0 md:top-full md:mt-1 md:w-56 md:rounded-xl md:border md:p-2 md:pb-2 md:shadow-xl md:animate-none">
                       <div className="px-3 py-2 text-xs text-slate-400 border-b border-slate-100">
                         {appUserData?.name || appUser.email}
                         <span
@@ -1262,6 +1267,7 @@ export default function NoraHRKanban() {
                         </button>
                       )}
                     </div>
+                    </>
                   )}
                 </div>
               </div>
@@ -1277,7 +1283,7 @@ export default function NoraHRKanban() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Buscar tarea, sistema o solicitante..."
-                    className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300"
+                    className="h-11 md:h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300"
                   />
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
@@ -1346,7 +1352,7 @@ export default function NoraHRKanban() {
                 <select
                   value={mod}
                   onChange={(e) => setMod(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   <option value="Todos">Módulos</option>
                   {moduleOptions.map((m) => (
@@ -1358,7 +1364,7 @@ export default function NoraHRKanban() {
                 <select
                   value={prio}
                   onChange={(e) => setPrio(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   <option value="Todas">Prioridades</option>
                   <option value="Alta">Alta</option>
@@ -1368,7 +1374,7 @@ export default function NoraHRKanban() {
                 <select
                   value={phase}
                   onChange={(e) => setPhase(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   {["Todas", ...phaseOptions].map((p) => (
                     <option key={p} value={p}>
@@ -1379,7 +1385,7 @@ export default function NoraHRKanban() {
                 <select
                   value={systemFilter}
                   onChange={(e) => setSystemFilter(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   <option value="Todos">Sistemas</option>
                   {systemOptions.map((v) => (
@@ -1391,7 +1397,7 @@ export default function NoraHRKanban() {
                 <select
                   value={typeFilter}
                   onChange={(e) => setTypeFilter(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   <option value="Todos">Tipos</option>
                   {typeOptions.map((v) => (
@@ -1403,7 +1409,7 @@ export default function NoraHRKanban() {
                 <select
                   value={slaFilter}
                   onChange={(e) => setSlaFilter(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   <option value="Todos">SLA</option>
                   <option value="Con SLA">Con SLA</option>
@@ -1413,7 +1419,7 @@ export default function NoraHRKanban() {
                 <select
                   value={responsibleFilter}
                   onChange={(e) => setResponsibleFilter(e.target.value)}
-                  className="h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
+                  className="h-11 md:h-9 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-600 outline-none"
                 >
                   <option value="Todos">Responsable</option>
                   {responsibleOptions.map((v) => (
@@ -1522,7 +1528,7 @@ export default function NoraHRKanban() {
                     {appCanCreate && (
                       <button
                         onClick={() => openAddTask("Pendiente")}
-                        className="mt-4 flex h-9 items-center gap-2 rounded-xl bg-cyan-600 px-4 text-xs font-black text-white hover:bg-cyan-700"
+                        className="mt-4 flex h-11 md:h-9 items-center gap-2 rounded-xl bg-cyan-600 px-4 text-xs font-black text-white hover:bg-cyan-700"
                       >
                         <Plus className="h-4 w-4" /> Nueva tarea
                       </button>
@@ -1538,7 +1544,11 @@ export default function NoraHRKanban() {
                     </p>
                   </div>
                 ) : (
-                  <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
+                  <div className="relative">
+                    {/* Scroll fade indicators */}
+                    <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-6 bg-gradient-to-r from-white to-transparent opacity-80 md:hidden" />
+                    <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-6 bg-gradient-to-l from-white to-transparent opacity-80 md:hidden" />
+                    <div className="flex gap-3 overflow-x-auto snap-x snap-mandatory pb-2">
                     {columns.map(({ status, items }) => (
                       <Column
                         key={status}
@@ -1558,6 +1568,7 @@ export default function NoraHRKanban() {
                       />
                     ))}
                   </div>
+                    </div>
                 )}
               </>
             )}
@@ -1639,6 +1650,16 @@ export default function NoraHRKanban() {
         </DragOverlay>
       </DndContext>
 
+      {/* Mobile FAB */}
+      {appCanCreate && (
+        <button
+          onClick={() => openAddTask()}
+          className="fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-cyan-600 text-white shadow-xl hover:bg-cyan-700 active:scale-90 transition-all md:hidden"
+          aria-label="Nueva tarea"
+        >
+          <Plus className="h-6 w-6" />
+        </button>
+      )}
       <button
         onClick={() => setSidebarOpen(!sidebarOpen)}
         className="hidden md:flex fixed right-0 top-1/2 -translate-y-1/2 z-40 items-center justify-center h-20 w-6 rounded-l-lg border border-r-0 border-slate-300 bg-white shadow-md text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-all cursor-pointer"
