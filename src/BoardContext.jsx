@@ -1,12 +1,30 @@
 import { createContext, useContext, useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, addDoc, getDocs, query, where, serverTimestamp, deleteDoc, doc, updateDoc, arrayUnion, arrayRemove } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  getDocs,
+  query,
+  where,
+  serverTimestamp,
+  deleteDoc,
+  doc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
+} from "firebase/firestore";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { APP_NAME } from "./branding";
 
 const BoardContext = createContext(null);
 const LOCAL_BOARDS_KEY = "norahr.local.boards";
-const DEFAULT_LOCAL_BOARD = { id: "local-demo-board", name: APP_NAME, ownerId: "local-demo-user", members: ["local-demo-user"] };
+const DEFAULT_LOCAL_BOARD = {
+  id: "local-demo-board",
+  name: APP_NAME,
+  ownerId: "local-demo-user",
+  members: ["local-demo-user"],
+};
 
 function safeGetItem(key) {
   try {
@@ -41,7 +59,9 @@ async function deleteSubcollection(boardId, subcol) {
   try {
     const snap = await getDocs(collection(db, "boards", boardId, subcol));
     if (snap.empty) return;
-    await Promise.allSettled(snap.docs.map(d => deleteDoc(doc(db, "boards", boardId, subcol, d.id))));
+    await Promise.allSettled(
+      snap.docs.map((d) => deleteDoc(doc(db, "boards", boardId, subcol, d.id))),
+    );
   } catch (e) {
     console.warn(`Error cleaning ${subcol} for board ${boardId}:`, e);
   }
@@ -61,7 +81,7 @@ export function BoardProvider({ children }) {
     if (isLocalDemo) {
       const localBoards = readLocalBoards();
       const saved = safeGetItem("activeBoardId");
-      const active = saved && localBoards.find(b => b.id === saved) ? saved : localBoards[0].id;
+      const active = saved && localBoards.find((b) => b.id === saved) ? saved : localBoards[0].id;
       safeSetItem("activeBoardId", active);
       setBoards(localBoards);
       setActiveBoardId(active);
@@ -85,7 +105,7 @@ export function BoardProvider({ children }) {
       (snap) => {
         if (cancelled) return;
         const list = snap.docs
-          .map(d => ({ id: d.id, ...d.data() }))
+          .map((d) => ({ id: d.id, ...d.data() }))
           .sort((a, b) => {
             const aTime = a.createdAt?.toMillis?.() || new Date(a.createdAt || 0).getTime();
             const bTime = b.createdAt?.toMillis?.() || new Date(b.createdAt || 0).getTime();
@@ -94,14 +114,13 @@ export function BoardProvider({ children }) {
         setBoards(list);
 
         if (list.length > 0) {
-          setActiveBoardId(prev => {
-            if (prev && list.find(b => b.id === prev)) return prev;
+          setActiveBoardId((prev) => {
+            if (prev && list.find((b) => b.id === prev)) return prev;
             const saved = safeGetItem("activeBoardId");
-            if (saved && list.find(b => b.id === saved)) return saved;
+            if (saved && list.find((b) => b.id === saved)) return saved;
             safeSetItem("activeBoardId", list[0].id);
             return list[0].id;
           });
-
         } else if (!initialized.current) {
           initialized.current = true;
           addDoc(collection(db, "boards"), {
@@ -110,12 +129,14 @@ export function BoardProvider({ children }) {
             ownerId: user.uid,
             members: [user.uid],
             createdAt: serverTimestamp(),
-          }).then(ref => {
-            safeSetItem("activeBoardId", ref.id);
-            setActiveBoardId(ref.id);
-          }).catch(e => {
-            console.error("Error creating default board:", e);
-          });
+          })
+            .then((ref) => {
+              safeSetItem("activeBoardId", ref.id);
+              setActiveBoardId(ref.id);
+            })
+            .catch((e) => {
+              console.error("Error creating default board:", e);
+            });
         }
 
         setLoading(false);
@@ -123,7 +144,7 @@ export function BoardProvider({ children }) {
       (err) => {
         console.error("Boards listener error:", err);
         setLoading(false);
-      }
+      },
     );
     return () => {
       cancelled = true;
@@ -139,7 +160,7 @@ export function BoardProvider({ children }) {
   async function createBoard(name) {
     if (isLocalDemo) {
       const localBoards = readLocalBoards();
-      if (localBoards.some(b => b.name.toLowerCase() === name.toLowerCase())) {
+      if (localBoards.some((b) => b.name.toLowerCase() === name.toLowerCase())) {
         throw new Error("Ya existe un board con ese nombre");
       }
       const nextBoard = {
@@ -160,7 +181,11 @@ export function BoardProvider({ children }) {
     if (!user) return null;
     try {
       const snap = await getDocs(
-        query(collection(db, "boards"), where("createdBy", "==", user.uid), where("name", "==", name))
+        query(
+          collection(db, "boards"),
+          where("createdBy", "==", user.uid),
+          where("name", "==", name),
+        ),
       );
       if (!snap.empty) {
         throw new Error("Ya existe un board con ese nombre");
@@ -185,7 +210,7 @@ export function BoardProvider({ children }) {
     if (isLocalDemo) {
       const localBoards = readLocalBoards();
       if (localBoards.length <= 1) return;
-      const nextBoards = localBoards.filter(b => b.id !== boardId);
+      const nextBoards = localBoards.filter((b) => b.id !== boardId);
       writeLocalBoards(nextBoards);
       setBoards(nextBoards);
       if (activeBoardId === boardId) {
@@ -209,7 +234,7 @@ export function BoardProvider({ children }) {
       await deleteDoc(doc(db, "boards", boardId));
 
       if (activeBoardId === boardId) {
-        const remaining = currentBoards.filter(b => b.id !== boardId);
+        const remaining = currentBoards.filter((b) => b.id !== boardId);
         if (remaining.length > 0) {
           switchBoard(remaining[0].id);
         }
@@ -245,7 +270,18 @@ export function BoardProvider({ children }) {
   }
 
   return (
-    <BoardContext.Provider value={{ boards, activeBoardId, switchBoard, createBoard, deleteBoard, addMember, removeMember, loading }}>
+    <BoardContext.Provider
+      value={{
+        boards,
+        activeBoardId,
+        switchBoard,
+        createBoard,
+        deleteBoard,
+        addMember,
+        removeMember,
+        loading,
+      }}
+    >
       {children}
     </BoardContext.Provider>
   );

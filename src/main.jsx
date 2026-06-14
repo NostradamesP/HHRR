@@ -12,5 +12,5 @@ createRoot(document.getElementById("root")).render(
         <NoraHRRoadmap />
       </BoardProvider>
     </AuthProvider>
-  </React.StrictMode>
+  </React.StrictMode>,
 );

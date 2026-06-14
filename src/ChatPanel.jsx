@@ -1,5 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import { collection, onSnapshot, addDoc, query, orderBy, limit, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  onSnapshot,
+  addDoc,
+  query,
+  orderBy,
+  limit,
+  serverTimestamp,
+} from "firebase/firestore";
 import { MessageSquare, Send } from "lucide-react";
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
@@ -23,7 +31,8 @@ export default function ChatPanel() {
   const { user, userData } = useAuth();
   const { activeBoardId } = useBoard();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
-  const chatUser = user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
+  const chatUser =
+    user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
   const chatUserData = userData || (isLocalDemo ? { name: "IT Manager" } : null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
@@ -39,13 +48,17 @@ export default function ChatPanel() {
     const q = query(
       collection(db, "boards", activeBoardId, "messages"),
       orderBy("createdAt", "asc"),
-      limit(100)
+      limit(100),
     );
-    const unsub = onSnapshot(q, (snap) => {
-      setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => {
-      console.error("Chat messages listener error:", err);
-    });
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      (err) => {
+        console.error("Chat messages listener error:", err);
+      },
+    );
     return unsub;
   }, [activeBoardId, isLocalDemo]);
 
@@ -98,10 +111,12 @@ export default function ChatPanel() {
           <MessageSquare className="h-3.5 w-3.5 text-cyan-500" />
           Chat del board
         </h3>
-        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">{messages.length}</span>
+        <span className="rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-bold text-slate-400">
+          {messages.length}
+        </span>
       </div>
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3" style={{ maxHeight: "190px" }}>
-        {messages.map(m => (
+        {messages.map((m) => (
           <div key={m.id} className="rounded-xl bg-slate-50 px-3 py-2 text-xs">
             <div className="flex items-baseline gap-1.5">
               <span className="max-w-[140px] truncate font-bold text-slate-700">{m.userName}</span>
@@ -115,7 +130,7 @@ export default function ChatPanel() {
       <form onSubmit={sendMessage} className="flex shrink-0 gap-1.5 border-t border-slate-100 p-2">
         <input
           value={text}
-          onChange={e => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value)}
           placeholder="Escribe un mensaje..."
           className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] outline-none transition-colors focus:border-cyan-300 focus:bg-white"
         />
