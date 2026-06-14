@@ -35,7 +35,7 @@ export default function Column({
     <div
       ref={setNodeRef}
       data-over={isOver ? "true" : "false"}
-      className={`group min-w-[320px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm transition-colors md:min-w-0 ${isOver ? "ring-2 ring-cyan-200" : ""}`}
+      className={`group min-w-[280px] snap-start rounded-xl border border-slate-200/80 bg-slate-100/80 shadow-sm transition-colors sm:min-w-[320px] md:min-w-0 ${isOver ? "ring-2 ring-cyan-200" : ""}`}
     >
       <div className="flex items-center justify-between px-3 py-2">
         <div className="flex items-center gap-2">

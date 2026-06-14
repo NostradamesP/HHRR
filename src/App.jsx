@@ -1094,7 +1094,7 @@ export default function NoraHRKanban() {
                 )}
                 <button
                   onClick={() => setSidebarOpen(true)}
-                  className="flex h-8 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
+                  className="flex h-10 sm:h-8 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-xs font-bold text-slate-700 hover:bg-slate-50"
                 >
                   <LayoutDashboard className="h-4 w-4" />{" "}
                   <span className="hidden sm:inline">Boards</span>
@@ -1280,19 +1280,19 @@ export default function NoraHRKanban() {
                     className="h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300"
                   />
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
                   {appCanCreate && (
                     <button
                       aria-label="Crear tarea"
                       onClick={() => openAddTask()}
-                      className="flex h-9 items-center gap-2 rounded-xl bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700 transition-colors"
+                      className="flex h-10 sm:h-9 items-center gap-2 rounded-xl bg-cyan-600 px-3 text-xs font-black text-white hover:bg-cyan-700 transition-colors"
                     >
                       <Plus className="h-4 w-4" /> Nueva tarea
                     </button>
                   )}
                   <button
                     onClick={() => setShowFilters(!showFilters)}
-                    className={`rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${showFilters ? "border-cyan-200 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
+                    className={`h-10 sm:h-auto rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${showFilters ? "border-cyan-200 bg-cyan-50 text-cyan-700" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}
                   >
                     {showFilters
                       ? "Ocultar filtros"
@@ -1303,7 +1303,7 @@ export default function NoraHRKanban() {
                   {hasActiveViewFilters && (
                     <button
                       onClick={clearViewFilters}
-                      className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
+                      className="h-10 sm:h-auto rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500 hover:bg-slate-50"
                     >
                       Limpiar
                     </button>
@@ -1313,7 +1313,7 @@ export default function NoraHRKanban() {
                       aria-label={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"}
                       title={deleteMode ? "Salir de eliminar tareas" : "Eliminar tareas"}
                       onClick={() => setDeleteMode(!deleteMode)}
-                      className={`flex h-9 w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
+                      className={`flex h-10 w-10 sm:h-9 sm:w-9 items-center justify-center rounded-xl border transition-colors ${deleteMode ? "border-red-500 bg-red-500 text-white" : "border-slate-200 bg-white text-slate-500 hover:bg-slate-50"}`}
                     >
                       <Trash2 className="h-4 w-4" />
                     </button>
@@ -1324,7 +1324,7 @@ export default function NoraHRKanban() {
                 </div>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-3 lg:grid-cols-5">
                 {opsCards.map(({ key, label, value, icon: Icon, tone }) => (
                   <button
                     key={key}

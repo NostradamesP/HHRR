@@ -15,7 +15,7 @@ export default function Modal({ open, onClose, children, wide = false }) {
       onClick={onClose}
     >
       <div
-        className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${wide ? "max-w-[1420px] p-0" : "max-w-lg p-4 md:p-6"}`}
+        className={`w-full overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl animate-in fade-in zoom-in-95 duration-200 ${wide ? "max-w-[1420px] p-0" : "max-w-lg p-3 sm:p-4 md:p-6"}`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}

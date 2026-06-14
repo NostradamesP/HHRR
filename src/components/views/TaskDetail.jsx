@@ -477,7 +477,7 @@ export default function TaskDetail({
   );
 
   return (
-    <div className="flex h-[92vh] min-h-[620px] flex-col overflow-hidden rounded-2xl bg-white text-slate-900">
+    <div className="flex max-h-[95vh] min-h-0 flex-col overflow-hidden rounded-2xl bg-white text-slate-900 md:h-[92vh] md:min-h-[620px]">
       <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 bg-white px-4">
         <div className="flex min-w-0 items-center gap-1">
           {[
