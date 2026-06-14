@@ -67,7 +67,8 @@ service cloud.firestore {
           "title", "module", "phase", "priority", "effort", "description", "status", "order",
           "startDate", "dueDate", "archived", "assignedTo", "assignedName", "ticketType",
           "requester", "system", "impact", "urgency", "slaHours", "checklist",
-          "operationalState", "blockedReason", "commentsCount", "createdBy", "createdAt", "updatedAt"
+          "operationalState", "blockedReason", "commentsCount", "createdBy", "createdAt", "updatedAt",
+          "attachments"
         ])
         && data.title is string
         && data.status is string
