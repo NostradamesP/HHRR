@@ -139,9 +139,15 @@ service cloud.firestore {
           && validTask(request.resource.data)
           && (
             isBoardOperator(boardId)
-            || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-              "status", "operationalState", "order", "commentsCount", "updatedAt"
-            ])
+            || (
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                "status", "operationalState", "order", "commentsCount", "updatedAt"
+              ])
+              && (
+                resource.data.status in ["pending", "in_progress"]
+                || request.resource.data.status == resource.data.status
+              )
+            )
           );
         allow delete: if isBoardOperator(boardId);
 

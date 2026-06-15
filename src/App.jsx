@@ -249,7 +249,7 @@ export default function NoraHRKanban() {
         }
       },
       (err) => {
-        console.error("Tasks listener error:", err);
+        if (import.meta.env.DEV) console.error("Tasks listener error:", err);
         showToast("No se pudieron cargar las tareas del board.");
       },
     );
@@ -289,7 +289,7 @@ export default function NoraHRKanban() {
         setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       (err) => {
-        console.error("Users listener error:", err);
+        if (import.meta.env.DEV) console.error("Users listener error:", err);
       },
     );
     return unsub;
@@ -475,7 +475,7 @@ export default function NoraHRKanban() {
         createdAt: serverTimestamp(),
       });
     } catch (e) {
-      console.error("Error creating log:", e);
+      if (import.meta.env.DEV) console.error("Error creating log:", e);
     }
   }
 
@@ -522,7 +522,7 @@ export default function NoraHRKanban() {
       });
       createLog(id, task.title, archived ? "archived" : "restored", "");
     } catch (e) {
-      console.error("Error archiving task:", e);
+      if (import.meta.env.DEV) console.error("Error archiving task:", e);
       showToast("Error al archivar la tarea");
     }
     setDeletingId(null);
@@ -625,7 +625,7 @@ export default function NoraHRKanban() {
         if (newStatus)
           createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
-        console.error("Error updating task status:", e);
+        if (import.meta.env.DEV) console.error("Error updating task status:", e);
         setTasks(previousTasks);
         tasksRef.current = previousTasks;
         showToast("Error al actualizar el estado de la tarea");
@@ -660,7 +660,7 @@ export default function NoraHRKanban() {
       });
       createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
     } catch (e) {
-      console.error("Error updating status:", e);
+      if (import.meta.env.DEV) console.error("Error updating status:", e);
       setDetailT(previousDetail);
     }
   }
@@ -680,7 +680,7 @@ export default function NoraHRKanban() {
       await deleteDoc(doc(db, "boards", activeBoardId, "tasks", id));
       if (task) createLog(id, task.title, "deleted", "");
     } catch (e) {
-      console.error("Error deleting task:", e);
+      if (import.meta.env.DEV) console.error("Error deleting task:", e);
       showToast("Error al eliminar la tarea");
     }
     setDeletingId(null);
@@ -762,7 +762,7 @@ export default function NoraHRKanban() {
       setShowAdd(false);
       setNewTaskStatus("Pendiente");
     } catch (e) {
-      console.error("Error adding task:", e);
+      if (import.meta.env.DEV) console.error("Error adding task:", e);
       showToast("Error al crear la tarea");
       throw new Error(e?.message || "Firebase rechazó la creación de la tarea.");
     }
@@ -790,7 +790,7 @@ export default function NoraHRKanban() {
       createLog(id, f.title, "updated", "");
       setEditT(null);
     } catch (e) {
-      console.error("Error editing task:", e);
+      if (import.meta.env.DEV) console.error("Error editing task:", e);
       showToast("Error al editar la tarea");
       throw new Error(e?.message || "Firebase rechazó la edición de la tarea.");
     }
@@ -817,7 +817,7 @@ export default function NoraHRKanban() {
       if (task)
         createLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
     } catch (e) {
-      console.error("Error patching task:", e);
+      if (import.meta.env.DEV) console.error("Error patching task:", e);
       setDetailT(previousDetail);
       showToast("Error al guardar los cambios");
     }

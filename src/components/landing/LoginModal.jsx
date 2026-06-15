@@ -82,28 +82,8 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
         await signup(email, password, name);
       }
       if (onLoginSuccess) onLoginSuccess();
-    } catch (err) {
-      if (
-        err.code === "auth/user-not-found" ||
-        err.code === "auth/wrong-password" ||
-        err.code === "auth/invalid-credential"
-      ) {
-        setError("Correo o contrasena incorrectos");
-      } else if (err.code === "auth/email-already-in-use") {
-        setError("Este correo ya esta registrado");
-      } else if (err.code === "auth/weak-password") {
-        setError("La contrasena debe tener al menos 6 caracteres");
-      } else if (err.code === "auth/invalid-email") {
-        setError("Correo electronico invalido");
-      } else if (err.code === "auth/too-many-requests") {
-        setError("Demasiados intentos. Intenta de nuevo mas tarde.");
-      } else if (err.code === "auth/network-request-failed") {
-        setError("Error de conexion. Verifica tu internet.");
-      } else if (err.code === "auth/user-disabled") {
-        setError("Esta cuenta ha sido deshabilitada.");
-      } else {
-        setError("Error al iniciar sesion. Verifica tus credenciales.");
-      }
+    } catch (_err) {
+      setError("Credenciales inv\u00e1lidas. Intenta de nuevo.");
       triggerShake();
     }
     setSubmitting(false);

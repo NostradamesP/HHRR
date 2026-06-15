@@ -56,7 +56,7 @@ export default function ChatPanel() {
         setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       (err) => {
-        console.error("Chat messages listener error:", err);
+        if (import.meta.env.DEV) console.error("Chat messages listener error:", err);
       },
     );
     return unsub;
@@ -94,7 +94,7 @@ export default function ChatPanel() {
       });
       setText("");
     } catch (err) {
-      console.error("Error sending message:", err);
+      if (import.meta.env.DEV) console.error("Error sending message:", err);
     }
   }
 
