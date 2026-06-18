@@ -144,7 +144,7 @@ service cloud.firestore {
                 "status", "operationalState", "order", "commentsCount", "updatedAt"
               ])
               && (
-                resource.data.status in ["pending", "in_progress"]
+                resource.data.status in ["Pendiente", "En progreso"]
                 || request.resource.data.status == resource.data.status
               )
             )
