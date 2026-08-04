@@ -101,6 +101,12 @@ import AdminPanel from "./components/config/AdminPanel";
 import LandingPage from "./components/landing/LandingPage";
 import LoginModal from "./components/landing/LoginModal";
 
+const LOADING_STEPS = [
+  { message: "Conectando tu tablero", subtitle: "Verificando tus permisos..." },
+  { message: "Cargando tareas", subtitle: "Sincronizando con tu espacio de trabajo..." },
+  { message: "Todo listo", subtitle: "Bienvenido a Kanban IT Department" },
+];
+
 export default function NoraHRKanban() {
   const { user, userData, loading, logout, isAdmin } = useAuth();
   const { activeBoardId, boards } = useBoard();
@@ -160,11 +166,24 @@ export default function NoraHRKanban() {
   const [deletingId, setDeletingId] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
+  const [loadingStep, setLoadingStep] = useState(0);
+
+  useEffect(() => {
+    if (!showLoadingScreen) return;
+    setLoadingStep(0);
+    const timers = LOADING_STEPS.map((_, i) =>
+      setTimeout(() => setLoadingStep(i + 1), (i + 1) * 600),
+    );
+    const done = setTimeout(() => setShowLoadingScreen(false), (LOADING_STEPS.length + 1) * 600);
+    return () => {
+      timers.forEach((t) => clearTimeout(t));
+      clearTimeout(done);
+    };
+  }, [showLoadingScreen]);
 
   function handleLoginSuccess() {
     setShowLoginModal(false);
     setShowLoadingScreen(true);
-    setTimeout(() => setShowLoadingScreen(false), 1500);
   }
 
   const appUserLevel = isLocalDemo
@@ -985,7 +1004,10 @@ export default function NoraHRKanban() {
 
   if (loading) return <LoadingScreen />;
 
-  if (showLoadingScreen) return <LoadingScreen />;
+  if (showLoadingScreen) {
+    const step = LOADING_STEPS[Math.min(loadingStep, LOADING_STEPS.length - 1)];
+    return <LoadingScreen message={step.message} subtitle={step.subtitle} />;
+  }
 
   if (!appUser) {
     return (

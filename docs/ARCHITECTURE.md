@@ -312,3 +312,43 @@ npm run build    # production build without errors
 npm run lint     # clean ESLint
 npm run dev      # local mode (localStorage) without regressions
 ```
+
+---
+
+## 8. Limitaciones conocidas (ES) / Known Limitations (EN)
+
+### ES
+
+- **Permisos UI vs reglas de Firestore**: la UI permite a usuarios con `jobTitle` de nivel
+  `editor` editar tareas completas (`appCanEdit` en `src/App.jsx`), pero `firestore.rules` solo
+  permite a los miembros **no operadores** actualizar los campos
+  `["status", "operationalState", "order", "commentsCount", "updatedAt"]`. Como resultado, un
+  editor que intente modificar título, módulo, fechas, etc., verá rechazada la escritura por
+  Firestore. Lo mismo aplica a `archiveTask` (el campo `archived` no está permitido para
+  miembros no operadores).
+  - **Decisión**: dejar el comportamiento actual y resolverlo en P1 mediante saneamiento de
+    patches por rol en `TaskUseCases.updateTask` (punto único de validación). No cambiar reglas
+    ni UI por ahora.
+- **Comentarios/adjuntos, mensajes y usuarios**: `TaskDetail`, `ChatPanel` y el listener de
+  `users` + `AdminPanel` siguen escribiendo directo a Firestore; aún no tienen ports.
+- **Jerarquía de roles** (`jobTitleHierarchy` en `itConfig`) se evalúa en la capa de
+  presentación; migrar a dominio/aplicación en P1.
+- **`App.jsx`** sigue siendo un orquestador grande; el siguiente paso es dividir en vistas y
+  hooks bajo `src/presentation/`.
+
+### EN
+
+- **UI permissions vs Firestore rules**: the UI lets users whose `jobTitle` level is `editor`
+  edit full tasks (`appCanEdit` in `src/App.jsx`), but `firestore.rules` only allows
+  non-operator members to update `["status", "operationalState", "order", "commentsCount",
+  "updatedAt"]`. As a result, an editor trying to change title, module, dates, etc. will have
+  the write rejected by Firestore. The same applies to `archiveTask` (`archived` is not allowed
+  for non-operator members).
+  - **Decision**: keep current behavior and resolve in P1 with per-role patch sanitization in
+    `TaskUseCases.updateTask` (single validation point). Do not change rules or UI for now.
+- **Comments/attachments, messages and users**: `TaskDetail`, `ChatPanel` and the `users`
+  listener + `AdminPanel` still write directly to Firestore; no ports yet.
+- **Role hierarchy** (`jobTitleHierarchy` in `itConfig`) is evaluated in the presentation layer;
+  move to domain/application in P1.
+- **`App.jsx`** is still a large orchestrator; next step is splitting into views and hooks under
+  `src/presentation/`.

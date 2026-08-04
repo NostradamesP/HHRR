@@ -4,3 +4,5 @@ dist
 .env
 gmail-addon/
 service-account.json
+firebase-debug.log
+firestore.rules.deployed.json
