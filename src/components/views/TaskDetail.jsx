@@ -5,16 +5,12 @@ import {
   query,
   orderBy,
   where,
-  addDoc,
-  updateDoc,
-  doc,
-  serverTimestamp,
-  increment,
   limit,
 } from "firebase/firestore";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { db, storage } from "../../firebase";
 import { useAuth } from "../../AuthContext";
+import { useServices } from "../../presentation/context/ServicesContext";
 import {
   Circle,
   Clock3,
@@ -54,7 +50,7 @@ import {
   fileToBase64,
   formatFileSize,
 } from "../../lib/utils";
-import { LOCAL_COMMENTS_KEY, LOCAL_LOGS_KEY, LOCAL_ATTACHMENTS_KEY } from "../../constants/storage";
+import { LOCAL_LOGS_KEY, LOCAL_ATTACHMENTS_KEY } from "../../constants/storage";
 import EditableCombo from "../ui/EditableCombo";
 import Avatar from "../ui/Avatar";
 import FieldPill from "../ui/FieldPill";
@@ -87,6 +83,7 @@ export default function TaskDetail({
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadError, setUploadError] = useState("");
   const { user, userData } = useAuth();
+  const { commentService } = useServices();
   const isLocalDetailDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const detailUser =
     user || (isLocalDetailDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
@@ -159,8 +156,6 @@ export default function TaskDetail({
     if (!activeBoardId && task.id) {
       const allLogs = readLocalJSON(LOCAL_LOGS_KEY, {});
       setLogs(allLogs[task.id] || []);
-      const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
-      setComments(all[task.id] || []);
       return;
     }
     if (!activeBoardId) return;
@@ -183,56 +178,31 @@ export default function TaskDetail({
   }, [task.id, activeBoardId]);
 
   useEffect(() => {
-    if (activeBoardId && task.id) {
-      const q = query(
-        collection(db, "boards", activeBoardId, "tasks", task.id, "comments"),
-        orderBy("createdAt", "asc"),
-        limit(100),
-      );
-      const unsub = onSnapshot(
-        q,
-        (snap) => {
-          setComments(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        },
-        (err) => {
-          console.error("Comments listener error:", err);
-        },
-      );
-      return unsub;
-    }
-  }, [task.id, activeBoardId]);
+    if (!task.id) return;
+    return commentService.subscribeComments(
+      activeBoardId,
+      task.id,
+      (next) => setComments(next),
+      (err) => {
+        console.error("Comments listener error:", err);
+      },
+    );
+  }, [task.id, activeBoardId, commentService]);
 
   async function sendComment(e) {
     e.preventDefault();
     const text = commentText.trim();
     if (!text || !detailUser) return;
-    if (!activeBoardId) {
-      const nextComment = {
-        id: `local-comment-${Date.now()}`,
+    try {
+      const created = await commentService.addComment(activeBoardId, task.id, {
         text,
         userId: detailUser.uid,
         userName: detailUserData?.name || detailUser.email,
-        createdAt: new Date().toISOString(),
-      };
-      const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
-      const next = { ...all, [task.id]: [...(all[task.id] || []), nextComment] };
-      writeLocalJSON(LOCAL_COMMENTS_KEY, next);
-      setComments(next[task.id]);
-      onTaskPatch?.(task.id, { commentsCount: next[task.id].length });
-      setCommentText("");
-      return;
-    }
-    try {
-      await addDoc(collection(db, "boards", activeBoardId, "tasks", task.id, "comments"), {
-        text,
-        userId: user.uid,
-        userName: userData?.name || user.email,
-        createdAt: serverTimestamp(),
       });
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", task.id), {
-        commentsCount: increment(1),
-        updatedAt: serverTimestamp(),
-      });
+      if (!activeBoardId && created) {
+        setComments((prev) => [...prev, created]);
+        onTaskPatch?.(task.id, { commentsCount: comments.length + 1 });
+      }
       setCommentText("");
     } catch (err) {
       console.error("Error creating comment:", err);

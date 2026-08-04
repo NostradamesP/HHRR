@@ -1,35 +1,13 @@
 import { useState, useEffect, useRef } from "react";
-import {
-  collection,
-  onSnapshot,
-  addDoc,
-  query,
-  orderBy,
-  limit,
-  serverTimestamp,
-} from "firebase/firestore";
 import { MessageSquare, Send } from "lucide-react";
-import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
-
-const LOCAL_BOARD_MESSAGES_KEY = "norahr.local.boardMessages";
-
-function readLocalMessages() {
-  try {
-    return JSON.parse(localStorage.getItem(LOCAL_BOARD_MESSAGES_KEY) || "{}");
-  } catch {
-    return {};
-  }
-}
-
-function writeLocalMessages(messages) {
-  localStorage.setItem(LOCAL_BOARD_MESSAGES_KEY, JSON.stringify(messages));
-}
+import { useServices } from "./presentation/context/ServicesContext";
 
 export default function ChatPanel() {
   const { user, userData } = useAuth();
   const { activeBoardId } = useBoard();
+  const { messageService } = useServices();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const chatUser =
     user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
@@ -40,27 +18,14 @@ export default function ChatPanel() {
 
   useEffect(() => {
     if (!activeBoardId) return;
-    if (!db || isLocalDemo) {
-      const all = readLocalMessages();
-      setMessages(all[activeBoardId] || []);
-      return;
-    }
-    const q = query(
-      collection(db, "boards", activeBoardId, "messages"),
-      orderBy("createdAt", "asc"),
-      limit(100),
-    );
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
+    return messageService.subscribeMessages(
+      activeBoardId,
+      (next) => setMessages(next),
       (err) => {
         if (import.meta.env.DEV) console.error("Chat messages listener error:", err);
       },
     );
-    return unsub;
-  }, [activeBoardId, isLocalDemo]);
+  }, [activeBoardId, messageService]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -70,28 +35,15 @@ export default function ChatPanel() {
     e.preventDefault();
     const cleanText = text.trim();
     if (!cleanText || !activeBoardId || !chatUser) return;
-    if (!db || isLocalDemo) {
-      const all = readLocalMessages();
-      const nextMessage = {
-        id: `local-message-${Date.now()}`,
-        userId: chatUser.uid,
-        userName: chatUserData?.name || chatUser.email,
-        text: cleanText,
-        createdAt: new Date().toISOString(),
-      };
-      const nextMessages = [...(all[activeBoardId] || []), nextMessage];
-      writeLocalMessages({ ...all, [activeBoardId]: nextMessages });
-      setMessages(nextMessages);
-      setText("");
-      return;
-    }
     try {
-      await addDoc(collection(db, "boards", activeBoardId, "messages"), {
+      const created = await messageService.addMessage(activeBoardId, {
         userId: chatUser.uid,
         userName: chatUserData?.name || chatUser.email,
         text: cleanText,
-        createdAt: serverTimestamp(),
       });
+      if (isLocalDemo && created) {
+        setMessages((prev) => [...prev, created]);
+      }
       setText("");
     } catch (err) {
       if (import.meta.env.DEV) console.error("Error sending message:", err);

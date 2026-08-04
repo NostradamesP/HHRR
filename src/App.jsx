@@ -8,7 +8,6 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import { collection, onSnapshot, query, limit } from "firebase/firestore";
 import {
   Archive,
   BarChart3,
@@ -31,7 +30,6 @@ import {
   User,
   X,
 } from "lucide-react";
-import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
 import { useServices } from "./presentation/context/ServicesContext";
@@ -110,7 +108,7 @@ const LOADING_STEPS = [
 export default function NoraHRKanban() {
   const { user, userData, loading, logout, isAdmin } = useAuth();
   const { activeBoardId, boards } = useBoard();
-  const { taskService, auditService } = useServices();
+  const { taskService, auditService, userService } = useServices();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appUser =
     user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
@@ -291,17 +289,13 @@ export default function NoraHRKanban() {
       setUsers(userData ? [{ id: user.uid, ...userData }] : []);
       return;
     }
-    const unsub = onSnapshot(
-      query(collection(db, "users"), limit(200)),
-      (snap) => {
-        setUsers(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-      },
+    return userService.subscribeUsers(
+      (next) => setUsers(next),
       (err) => {
         if (import.meta.env.DEV) console.error("Users listener error:", err);
       },
     );
-    return unsub;
-  }, [user, userData, appIsAdmin, isLocalDemo]);
+  }, [user, userData, appIsAdmin, isLocalDemo, userService]);
 
   const localCommentTaskIds = useMemo(() => {
     if (!isLocalDemo) return new Set();

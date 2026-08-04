@@ -1,18 +1,16 @@
 import { useState } from "react";
 import { Settings } from "lucide-react";
-import { updateDoc, deleteDoc, doc } from "firebase/firestore";
-import { db } from "../../firebase";
 import { defaultItConfig } from "../../constants/defaultItConfig";
+import { useServices } from "../../presentation/context/ServicesContext";
 
 export default function AdminPanel({ users, currentUser, onClose, itConfig = defaultItConfig }) {
   const [updating, setUpdating] = useState({});
+  const { userService } = useServices();
 
   async function toggleRole(uid, currentRole) {
     setUpdating((p) => ({ ...p, [uid]: true }));
     try {
-      await updateDoc(doc(db, "users", uid), {
-        role: currentRole === "admin" ? "member" : "admin",
-      });
+      await userService.updateRole(uid, currentRole === "admin" ? "member" : "admin");
     } catch {
       alert("Error al cambiar rol");
     }
@@ -22,7 +20,7 @@ export default function AdminPanel({ users, currentUser, onClose, itConfig = def
   async function updateJobTitle(uid, jobTitle) {
     setUpdating((p) => ({ ...p, [uid]: true }));
     try {
-      await updateDoc(doc(db, "users", uid), { jobTitle });
+      await userService.updateJobTitle(uid, jobTitle);
     } catch {
       alert("Error al actualizar puesto");
     }
@@ -32,7 +30,7 @@ export default function AdminPanel({ users, currentUser, onClose, itConfig = def
   async function removeUser(uid, email) {
     if (!confirm(`¿Eliminar a ${email} de la organización?`)) return;
     try {
-      await deleteDoc(doc(db, "users", uid));
+      await userService.removeUser(uid);
     } catch {
       alert("Error al eliminar usuario");
     }
