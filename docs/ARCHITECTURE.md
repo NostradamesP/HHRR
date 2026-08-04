@@ -333,8 +333,10 @@ npm run dev      # local mode (localStorage) without regressions
   `canFullEdit`; `src/constants/defaultItConfig.js` re-exporta desde el dominio (fuente única).
 - **Adjuntos**: `TaskDetail` sigue subiendo/eliminando archivos directo a Firebase Storage
   (aún sin port); diferido a una fase posterior.
-- **`App.jsx`** sigue siendo un orquestador grande; el siguiente paso es dividir en vistas y
-  hooks bajo `src/presentation/`.
+- ~~`App.jsx` orquestador~~ **Resuelto en P1**: la lógica de datos/filtros se extrajo a hooks en
+  `src/presentation/hooks/` (`useBoardData`, `useUsers`, `useItConfig`, `usePermissions`,
+  `useTaskActions`, `useFilters`, `useCsv`); `App.jsx` quedó como orquestador de dnd, overlays y
+  modales.
 
 ### EN
 
@@ -351,5 +353,7 @@ npm run dev      # local mode (localStorage) without regressions
   `canFullEdit`; `src/constants/defaultItConfig.js` re-exports from the domain (single source).
 - **Attachments**: `TaskDetail` still uploads/deletes files directly to Firebase Storage (no
   port yet); deferred to a later phase.
-- **`App.jsx`** is still a large orchestrator; next step is splitting into views and hooks under
-  `src/presentation/`.
+- ~~`App.jsx` orchestrator~~ **Resolved in P1**: data/filter logic extracted to hooks under
+  `src/presentation/hooks/` (`useBoardData`, `useUsers`, `useItConfig`, `usePermissions`,
+  `useTaskActions`, `useFilters`, `useCsv`); `App.jsx` is now a dnd + overlay + modals
+  orchestrator.

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -12,14 +12,12 @@ import {
   Archive,
   BarChart3,
   Calendar,
-  CheckCircle2,
   Circle,
   Download,
   Flag,
   Flame,
   LayoutDashboard,
   ListFilter,
-  Lock,
   MoreVertical,
   Plus,
   Search,
@@ -27,7 +25,6 @@ import {
   Settings,
   SlidersHorizontal,
   Trash2,
-  User,
   X,
 } from "lucide-react";
 import { useAuth } from "./AuthContext";
@@ -38,41 +35,27 @@ import { APP_MONOGRAM, APP_NAME, displayBoardName } from "./branding";
 
 // Constants
 import { initialTasks } from "./constants/tasks";
-import {
-  statuses,
-  phaseMap,
-  modules,
-  effortWeight,
-  priorityMeta,
-  statusMeta,
-  operationalStates,
-} from "./constants/meta";
 import { defaultItConfig } from "./constants/defaultItConfig";
+import { statusMeta, priorityMeta, operationalStates, phaseMap } from "./constants/meta";
 import {
   LOCAL_TASKS_KEY,
   LOCAL_COMMENTS_KEY,
   LOCAL_IT_CONFIG_KEY,
   LOCAL_LOGS_KEY,
-  localTasksKey,
 } from "./constants/storage";
 
 // Utils
-import {
-  readLocalJSON,
-  writeLocalJSON,
-  makeChecklist,
-  enrichLocalTask,
-  checklistProgress,
-  isTaskOverdue,
-  getOperationalState,
-  isReadyToClose,
-  operationalRank,
-  csvCell,
-  cleanValue,
-  displayPersonName,
-  uniqueOptions,
-} from "./lib/utils";
-import { kanbanCollisionDetection, filterTasks } from "./lib/kanban";
+import { enrichLocalTask, displayPersonName, isTaskOverdue, getOperationalState } from "./lib/utils";
+import { kanbanCollisionDetection } from "./lib/kanban";
+
+// Presentation hooks
+import { useBoardData } from "./presentation/hooks/useBoardData";
+import { useUsers } from "./presentation/hooks/useUsers";
+import { useItConfig } from "./presentation/hooks/useItConfig";
+import { usePermissions } from "./presentation/hooks/usePermissions";
+import { useTaskActions } from "./presentation/hooks/useTaskActions";
+import { useFilters } from "./presentation/hooks/useFilters";
+import { useCsv } from "./presentation/hooks/useCsv";
 
 // UI Components
 import ErrorBoundary from "./components/ui/ErrorBoundary";
@@ -109,14 +92,13 @@ export default function NoraHRKanban() {
   const { user, userData, loading, logout, isAdmin } = useAuth();
   const { activeBoardId, boards } = useBoard();
   const { taskService, auditService, userService } = useServices();
+
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appUser =
     user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
   const appUserData =
     userData ||
     (isLocalDemo ? { name: "IT Manager", role: "admin", email: "demo@norahr.local" } : null);
-  const appRole = appUserData?.role || "member";
-  const appIsAdmin = isAdmin || isLocalDemo;
   const appActiveBoardId = activeBoardId || (isLocalDemo ? "local-demo-board" : null);
   const appBoards = useMemo(
     () =>
@@ -127,17 +109,8 @@ export default function NoraHRKanban() {
           : boards,
     [boards, isLocalDemo],
   );
-  const [tasks, setTasks] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [mod, setMod] = useState("Todos");
-  const [prio, setPrio] = useState("Todas");
-  const [phase, setPhase] = useState("Todas");
-  const [systemFilter, setSystemFilter] = useState("Todos");
-  const [typeFilter, setTypeFilter] = useState("Todos");
-  const [slaFilter, setSlaFilter] = useState("Todos");
-  const [responsibleFilter, setResponsibleFilter] = useState("Todos");
-  const [opsFilter, setOpsFilter] = useState("all");
+
+  const [activeId, setActiveId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [newTaskStatus, setNewTaskStatus] = useState("Pendiente");
   const [editT, setEditT] = useState(null);
@@ -145,26 +118,119 @@ export default function NoraHRKanban() {
   const [collapsed, setCollapsed] = useState({});
   const [showAdmin, setShowAdmin] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-  const [overdueOnly, setOverdueOnly] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showActionsMenu, setShowActionsMenu] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [deleteMode, setDeleteMode] = useState(false);
   const [viewMode, setViewMode] = useState("board");
-  const [myWorkOnly, setMyWorkOnly] = useState(false);
-  const [commentsOnly, setCommentsOnly] = useState(false);
   const [showItConfig, setShowItConfig] = useState(false);
-  const [itConfig, setItConfig] = useState(() =>
-    readLocalJSON(LOCAL_IT_CONFIG_KEY, defaultItConfig),
-  );
-  const [activeId, setActiveId] = useState(null);
-  const [toast, setToast] = useState(null);
-  const showToast = useCallback((msg, type = "error") => setToast({ message: msg, type }), []);
   const [deletingId, setDeletingId] = useState(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showLoadingScreen, setShowLoadingScreen] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
+  const [toast, setToast] = useState(null);
+  const showToast = useCallback((msg, type = "error") => setToast({ message: msg, type }), []);
+
+  const { appIsAdmin, appActor, appCanCreate, appCanEdit } = usePermissions({
+    isAdmin,
+    isLocalDemo,
+    appUser,
+    appUserData,
+  });
+  const { itConfig, setItConfig, addCatalogValue } = useItConfig({ isLocalDemo });
+  const { tasks, setTasks, tasksRef } = useBoardData({
+    isLocalDemo,
+    user,
+    activeBoardId,
+    itConfig,
+    showToast,
+    taskService,
+    appActor,
+    setDetailT,
+    setActiveId,
+  });
+  const { users } = useUsers({ isLocalDemo, user, userData, appIsAdmin, userService });
+  const {
+    createLog,
+    createLocalLog,
+    archiveTask,
+    updateStatus,
+    deleteTask,
+    addTask,
+    editTask,
+    patchTask,
+  } = useTaskActions({
+    isLocalDemo,
+    user,
+    userData,
+    activeBoardId,
+    taskService,
+    auditService,
+    appActor,
+    appUser,
+    appUserData,
+    newTaskStatus,
+    setNewTaskStatus,
+    setShowAdd,
+    setEditT,
+    showToast,
+    tasksRef,
+    setTasks,
+    setDeletingId,
+    detailT,
+    setDetailT,
+  });
+  const {
+    searchQuery,
+    setSearchQuery,
+    mod,
+    setMod,
+    prio,
+    setPrio,
+    phase,
+    setPhase,
+    systemFilter,
+    setSystemFilter,
+    typeFilter,
+    setTypeFilter,
+    slaFilter,
+    setSlaFilter,
+    responsibleFilter,
+    setResponsibleFilter,
+    opsFilter,
+    setOpsFilter,
+    showArchived,
+    setShowArchived,
+    overdueOnly,
+    setOverdueOnly,
+    displayedTasks,
+    opsCards,
+    overdueCount,
+    progress,
+    effortProgress,
+    statusOptions,
+    moduleOptions,
+    phaseOptions,
+    systemOptions,
+    typeOptions,
+    responsibleOptions,
+    columns,
+    hasActiveViewFilters,
+    clearViewFilters,
+    handleSidebarAction,
+  } = useFilters({ tasks, isLocalDemo, appUser, appUserData, itConfig, setViewMode });
+  const { exportCSV, exportVisibleCSV, printReport } = useCsv({ tasks, displayedTasks });
+
+  const activeTask = useMemo(() => tasks.find((t) => t.id === activeId), [activeId, tasks]);
+  const activeBoardName = useMemo(() => {
+    const b = appBoards.find((b) => b.id === appActiveBoardId);
+    return b ? displayBoardName(b.name) : APP_NAME;
+  }, [appBoards, appActiveBoardId]);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
 
   useEffect(() => {
     if (!showLoadingScreen) return;
@@ -184,355 +250,26 @@ export default function NoraHRKanban() {
     setShowLoadingScreen(true);
   }
 
-  const appUserLevel = isLocalDemo
-    ? "manager"
-    : (itConfig.jobTitleHierarchy || {})[appUserData?.jobTitle || ""] || "viewer";
-  const appCanCreate =
-    appIsAdmin || appRole === "manager" || appUserLevel === "manager" || appUserLevel === "admin";
-  const appCanEdit = appCanCreate || appUserLevel === "editor";
-  const appActor = useMemo(
-    () => ({
-      uid: appUser?.uid || null,
-      role: appUserData?.role,
-      jobTitle: appUserData?.jobTitle,
-    }),
-    [appUser?.uid, appUserData?.role, appUserData?.jobTitle],
-  );
-  const activeTask = useMemo(() => tasks.find((t) => t.id === activeId), [activeId, tasks]);
-  const boardsRef = useRef(appBoards);
-  const tasksRef = useRef(tasks);
-  tasksRef.current = tasks;
-  const localLoaded = useRef(false);
-  const skipNextLocalWrite = useRef(false);
-  boardsRef.current = appBoards;
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
-  useEffect(() => {
-    if (isLocalDemo) {
-      localLoaded.current = false;
-      const localBoardId = activeBoardId || "local-demo-board";
-      const saved = readLocalJSON(localTasksKey(localBoardId), null);
-      const legacySaved =
-        localBoardId === "local-demo-board" ? readLocalJSON(LOCAL_TASKS_KEY, null) : null;
-      const source = Array.isArray(saved) ? saved : legacySaved;
-      const localTasks =
-        Array.isArray(source) && source.length
-          ? source.map((t, idx) => enrichLocalTask(t, idx, itConfig))
-          : localBoardId === "local-demo-board"
-            ? initialTasks.map((t, idx) => enrichLocalTask(t, idx, itConfig))
-            : [];
-      skipNextLocalWrite.current = true;
-      setTasks(localTasks);
-      setDetailT(null);
-      setActiveId(null);
-      localLoaded.current = true;
-      return;
-    }
-    if (!user || !activeBoardId) {
-      setTasks([]);
-      tasksRef.current = [];
-      setDetailT(null);
-      setActiveId(null);
-      return;
-    }
-    setTasks([]);
-    tasksRef.current = [];
-    setDetailT(null);
-    setActiveId(null);
-    const unsub = taskService.subscribeTasks(
-      activeBoardId,
-      (ts) => {
-        setTasks(ts);
-        tasksRef.current = ts;
-        setDetailT((prev) => {
-          if (!prev) return prev;
-          const updated = ts.find((t) => t.id === prev.id);
-          return updated || null;
-        });
-        const missingOrder = ts.filter((t) => t.order === undefined || t.order === null);
-        if (missingOrder.length > 0) {
-          Promise.allSettled(
-            missingOrder.map((t) =>
-              taskService.updateTask(activeBoardId, t.id, { order: Date.now() }, appActor),
-            ),
-          );
-        }
-      },
-      (err) => {
-        if (import.meta.env.DEV) console.error("Tasks listener error:", err);
-        showToast("No se pudieron cargar las tareas del board.");
-      },
-    );
-    return unsub;
-  }, [user, activeBoardId, isLocalDemo, showToast, itConfig, taskService, appActor]);
-
-  useEffect(() => {
-    if (!isLocalDemo || !localLoaded.current) return;
-    if (skipNextLocalWrite.current) {
-      skipNextLocalWrite.current = false;
-      return;
-    }
-    writeLocalJSON(localTasksKey(activeBoardId || "local-demo-board"), tasks);
-  }, [tasks, isLocalDemo, activeBoardId]);
-
-  useEffect(() => {
-    if (!isLocalDemo) return;
-    writeLocalJSON(LOCAL_IT_CONFIG_KEY, itConfig);
-  }, [itConfig, isLocalDemo]);
-
-  useEffect(() => {
-    if (isLocalDemo) {
-      setUsers([]);
-      return;
-    }
-    if (!user) {
-      setUsers([]);
-      return;
-    }
-    if (!appIsAdmin) {
-      setUsers(userData ? [{ id: user.uid, ...userData }] : []);
-      return;
-    }
-    return userService.subscribeUsers(
-      (next) => setUsers(next),
-      (err) => {
-        if (import.meta.env.DEV) console.error("Users listener error:", err);
-      },
-    );
-  }, [user, userData, appIsAdmin, isLocalDemo, userService]);
-
-  const localCommentTaskIds = useMemo(() => {
-    if (!isLocalDemo) return new Set();
-    const all = readLocalJSON(LOCAL_COMMENTS_KEY, {});
-    return new Set(
-      Object.entries(all)
-        .filter(([, comments]) => Array.isArray(comments) && comments.length > 0)
-        .map(([taskId]) => taskId),
-    );
-  }, [isLocalDemo]);
-
-  const displayedTasks = useMemo(() => {
-    let ts = tasks.filter((t) => (showArchived ? t.archived : !t.archived));
-    if (myWorkOnly) {
-      ts = ts.filter((t) => t.assignedTo === appUser?.uid || t.assignedName === appUserData?.name);
-    }
-    if (commentsOnly) {
-      ts = ts.filter(
-        (t) => Number(t.commentsCount || 0) > 0 || localCommentTaskIds.has(String(t.id)),
-      );
-    }
-    if (systemFilter !== "Todos") ts = ts.filter((t) => t.system === systemFilter);
-    if (typeFilter !== "Todos") ts = ts.filter((t) => t.ticketType === typeFilter);
-    if (responsibleFilter !== "Todos") ts = ts.filter((t) => t.assignedName === responsibleFilter);
-    if (slaFilter === "Con SLA") ts = ts.filter((t) => t.slaHours);
-    if (slaFilter === "Sin SLA") ts = ts.filter((t) => !t.slaHours);
-    if (slaFilter === "Vencidas") {
-      ts = ts.filter(isTaskOverdue);
-    }
-    if (overdueOnly) {
-      ts = ts.filter(isTaskOverdue);
-    }
-    if (opsFilter === "overdue") ts = ts.filter(isTaskOverdue);
-    if (opsFilter === "blocked") ts = ts.filter((t) => getOperationalState(t) === "blocked");
-    if (opsFilter === "unassigned") ts = ts.filter((t) => !t.assignedTo && !t.assignedName);
-    if (opsFilter === "urgent")
-      ts = ts.filter(
-        (t) => t.urgency === "Crítica" || t.urgency === "Alta" || t.priority === "Alta",
-      );
-    if (opsFilter === "ready") ts = ts.filter(isReadyToClose);
-    ts = [...ts].sort((a, b) => {
-      const rank = operationalRank(a) - operationalRank(b);
-      if (rank !== 0) return rank;
-      return (a.order || 0) - (b.order || 0);
-    });
-    return filterTasks(ts, searchQuery, mod, prio, phase);
-  }, [
-    tasks,
-    searchQuery,
-    mod,
-    prio,
-    phase,
-    showArchived,
-    overdueOnly,
-    myWorkOnly,
-    commentsOnly,
-    localCommentTaskIds,
-    appUser?.uid,
-    appUserData?.name,
-    systemFilter,
-    typeFilter,
-    responsibleFilter,
-    slaFilter,
-    opsFilter,
-  ]);
-
-  const operationalMetrics = useMemo(() => {
-    const active = tasks.filter((t) => !t.archived);
-    return {
-      overdue: active.filter(isTaskOverdue).length,
-      blocked: active.filter((t) => getOperationalState(t) === "blocked").length,
-      unassigned: active.filter((t) => !t.assignedTo && !t.assignedName).length,
-      urgent: active.filter(
-        (t) => t.urgency === "Crítica" || t.urgency === "Alta" || t.priority === "Alta",
-      ).length,
-      ready: active.filter(isReadyToClose).length,
-    };
-  }, [tasks]);
-
-  const opsCards = useMemo(
-    () => [
-      {
-        key: "overdue",
-        label: "Vencidas",
-        value: operationalMetrics.overdue,
-        icon: Flame,
-        tone: "border-red-100 bg-red-50 text-red-700",
-      },
-      {
-        key: "blocked",
-        label: "Bloqueadas",
-        value: operationalMetrics.blocked,
-        icon: Lock,
-        tone: "border-rose-100 bg-rose-50 text-rose-700",
-      },
-      {
-        key: "unassigned",
-        label: "Sin asignar",
-        value: operationalMetrics.unassigned,
-        icon: User,
-        tone: "border-slate-200 bg-white text-slate-700",
-      },
-      {
-        key: "urgent",
-        label: "Alta urgencia",
-        value: operationalMetrics.urgent,
-        icon: Flag,
-        tone: "border-amber-100 bg-amber-50 text-amber-700",
-      },
-      {
-        key: "ready",
-        label: "Cierre pendiente",
-        value: operationalMetrics.ready,
-        icon: CheckCircle2,
-        tone: "border-emerald-100 bg-emerald-50 text-emerald-700",
-      },
-    ],
-    [operationalMetrics],
-  );
-
-  const overdueCount = useMemo(() => {
-    return tasks.filter((t) => !t.archived && isTaskOverdue(t)).length;
-  }, [tasks]);
-
-  const statusOptions = useMemo(
-    () => uniqueOptions([...statuses, ...tasks.map((t) => t.status)]),
-    [tasks],
-  );
-
-  const columns = useMemo(() => {
-    const byCol = {};
-    statusOptions.forEach((s) => (byCol[s] = []));
-    displayedTasks.forEach((t) => {
-      if (byCol[t.status]) byCol[t.status].push(t);
-    });
-    return statusOptions.map((s) => ({ status: s, items: byCol[s] }));
-  }, [displayedTasks, statusOptions]);
-
-  const moduleOptions = useMemo(
-    () => uniqueOptions([...modules, ...tasks.map((t) => t.module)]),
-    [tasks],
-  );
-  const phaseOptions = useMemo(
-    () => uniqueOptions([...Object.keys(phaseMap), ...tasks.map((t) => t.phase)]),
-    [tasks],
-  );
-  const systemOptions = useMemo(
-    () => uniqueOptions([...(itConfig.systems || []), ...tasks.map((t) => t.system)]),
-    [itConfig.systems, tasks],
-  );
-  const typeOptions = useMemo(
-    () => uniqueOptions([...(itConfig.ticketTypes || []), ...tasks.map((t) => t.ticketType)]),
-    [itConfig.ticketTypes, tasks],
-  );
-  const responsibleOptions = useMemo(
-    () => uniqueOptions([...(itConfig.team || []), ...tasks.map((t) => t.assignedName)]),
-    [itConfig.team, tasks],
-  );
-
-  const done = tasks.filter((t) => t.status === "Hecho").length;
-  const progress = tasks.length ? Math.round((done / tasks.length) * 100) : 0;
-  const effortDone = tasks
-    .filter((t) => t.status === "Hecho")
-    .reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
-  const effortTotal = tasks.reduce((a, t) => a + (effortWeight[t.effort] || 0), 0);
-  const effortProgress = effortTotal ? Math.round((effortDone / effortTotal) * 100) : 0;
-
-  async function createLog(taskId, taskTitle, action, details) {
-    if (isLocalDemo) return;
-    if (!user || !activeBoardId) return;
-    try {
-      await auditService.log({
-        boardId: activeBoardId,
-        action,
-        taskId,
-        taskTitle,
-        details: details || "",
-        actor: user.uid,
-        actorName: userData?.name || user.email,
-      });
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error creating log:", e);
-    }
+  function toggleCollapse(s) {
+    setCollapsed((c) => ({ ...c, [s]: !c[s] }));
   }
 
-  function createLocalLog(taskId, taskTitle, action, details) {
-    const all = readLocalJSON(LOCAL_LOGS_KEY, {});
-    const log = {
-      id: `local-log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      action,
-      taskId,
-      taskTitle,
-      details: details || "",
-      userName: appUserData?.name || "IT Manager",
-      createdAt: new Date().toISOString(),
-    };
-    all[taskId] = [...(all[taskId] || []), log];
-    writeLocalJSON(LOCAL_LOGS_KEY, all);
+  function openAddTask(status = "Pendiente") {
+    setNewTaskStatus(status);
+    setShowAdd(true);
   }
 
-  function addCatalogValue(key, value) {
-    const clean = cleanValue(value);
-    if (!clean) return;
-    setItConfig((prev) => {
-      const current = Array.isArray(prev[key]) ? prev[key] : [];
-      if (current.some((item) => item.toLowerCase() === clean.toLowerCase())) return prev;
-      return { ...prev, [key]: [...current, clean] };
-    });
-  }
-
-  async function archiveTask(id, archived) {
-    setDeletingId(id);
-    const currentTasks = tasksRef.current;
-    const task = currentTasks.find((t) => t.id === id);
-    if (!task) return setDeletingId(null);
-    if (isLocalDemo) {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, archived } : t)));
-      createLocalLog(id, task.title, archived ? "archived" : "restored", "");
-      setDeletingId(null);
-      return;
-    }
-    try {
-      await taskService.updateTask(activeBoardId, id, { archived }, appActor);
-      createLog(id, task.title, archived ? "archived" : "restored", "");
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error archiving task:", e);
-      showToast("Error al archivar la tarea");
-    }
-    setDeletingId(null);
+  function resetLocalDemo() {
+    if (!confirm("¿Resetear datos locales demo?")) return;
+    localStorage.removeItem(LOCAL_TASKS_KEY);
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith(`${LOCAL_TASKS_KEY}.`))
+      .forEach((key) => localStorage.removeItem(key));
+    localStorage.removeItem(LOCAL_COMMENTS_KEY);
+    localStorage.removeItem(LOCAL_IT_CONFIG_KEY);
+    localStorage.removeItem(LOCAL_LOGS_KEY);
+    setItConfig(defaultItConfig);
+    setTasks(initialTasks.map((t, idx) => enrichLocalTask(t, idx, defaultItConfig)));
   }
 
   async function handleDragEnd(e) {
@@ -639,369 +376,6 @@ export default function NoraHRKanban() {
       }
     }
     setActiveId(null);
-  }
-
-  async function updateStatus(id, s) {
-    const currentTasks = tasksRef.current;
-    const task = currentTasks.find((t) => t.id === id);
-    if (!task) return;
-    const opPatch =
-      s === "Bloqueado" ? { operationalState: "blocked" } : { operationalState: "normal" };
-    const previousDetail = detailT;
-    setDetailT((prev) =>
-      prev && prev.id === id ? { ...prev, status: s, ...opPatch, order: Date.now() } : prev,
-    );
-    if (isLocalDemo) {
-      setTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: s, ...opPatch, order: Date.now() } : t)),
-      );
-      createLocalLog(id, task.title, "status_changed", `${task.status} → ${s}`);
-      return;
-    }
-    try {
-      await taskService.updateTask(activeBoardId, id, {
-        status: s,
-        ...opPatch,
-        order: Date.now(),
-      }, appActor);
-      createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error updating status:", e);
-      setDetailT(previousDetail);
-    }
-  }
-
-  async function deleteTask(id) {
-    setDeletingId(id);
-    const currentTasks = tasksRef.current;
-    const task = currentTasks.find((t) => t.id === id);
-    if (!task && !isLocalDemo) return;
-    if (isLocalDemo) {
-      setTasks((prev) => prev.filter((t) => t.id !== id));
-      if (task) createLocalLog(id, task.title, "deleted", "");
-      setDeletingId(null);
-      return;
-    }
-    try {
-      await taskService.deleteTask(activeBoardId, id);
-      if (task) createLog(id, task.title, "deleted", "");
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error deleting task:", e);
-      showToast("Error al eliminar la tarea");
-    }
-    setDeletingId(null);
-  }
-
-  async function addTask(f) {
-    const defaultAssigneeId = appUser?.uid || "";
-    const defaultAssigneeName = appUserData?.name || appUser?.email || "";
-    if (isLocalDemo) {
-      const newId = `local-${Date.now()}`;
-      setTasks((prev) => [
-        {
-          title: f.title,
-          module: f.module,
-          phase: f.phase,
-          priority: f.priority,
-          effort: f.effort,
-          description: f.description || "",
-          status: newTaskStatus,
-          order: Date.now(),
-          startDate: f.startDate || "",
-          dueDate: f.dueDate || "",
-          archived: false,
-          assignedTo: f.assignedTo || defaultAssigneeId,
-          assignedName: f.assignedName || defaultAssigneeName,
-          ticketType: f.ticketType || "",
-          requester: f.requester || "",
-          system: f.system || "",
-          impact: f.impact || "",
-          urgency: f.urgency || "",
-          slaHours: f.slaHours || "",
-          checklist: f.checklist || makeChecklist(f.title),
-          commentsCount: 0,
-          operationalState: f.operationalState || "normal",
-          blockedReason: f.blockedReason || "",
-          id: newId,
-        },
-        ...prev,
-      ]);
-      createLocalLog(newId, f.title, "created", "");
-      setShowAdd(false);
-      setNewTaskStatus("Pendiente");
-      return;
-    }
-    if (!activeBoardId) {
-      throw new Error("No hay un board activo para crear la tarea.");
-    }
-    try {
-      const ref = await taskService.createTask(activeBoardId, {
-        title: f.title,
-        module: f.module,
-        phase: f.phase,
-        priority: f.priority,
-        effort: f.effort,
-        description: f.description || "",
-        status: newTaskStatus,
-        order: Date.now(),
-        startDate: f.startDate || "",
-        dueDate: f.dueDate || "",
-        archived: false,
-        assignedTo: f.assignedTo || defaultAssigneeId,
-        assignedName: f.assignedName || defaultAssigneeName,
-        ticketType: f.ticketType || "",
-        requester: f.requester || "",
-        system: f.system || "",
-        impact: f.impact || "",
-        urgency: f.urgency || "",
-        slaHours: f.slaHours || "",
-        checklist: f.checklist || makeChecklist(f.title),
-        commentsCount: 0,
-        operationalState: f.operationalState || "normal",
-        blockedReason: f.blockedReason || "",
-        attachments: [],
-        createdBy: user.uid,
-      });
-      createLog(ref.id, f.title, "created", "");
-      setShowAdd(false);
-      setNewTaskStatus("Pendiente");
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error adding task:", e);
-      showToast("Error al crear la tarea");
-      throw new Error(e?.message || "Firebase rechazó la creación de la tarea.");
-    }
-  }
-
-  async function editTask(f) {
-    if (isLocalDemo) {
-      const { id, ...data } = f;
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...data } : t)));
-      const currentTasks = tasksRef.current;
-      const task = currentTasks.find((t) => t.id === id);
-      createLocalLog(id, (task || f).title, "updated", "");
-      setEditT(null);
-      return;
-    }
-    if (!activeBoardId) {
-      throw new Error("No hay un board activo para editar la tarea.");
-    }
-    try {
-      const { id, ...data } = f;
-      await taskService.updateTask(activeBoardId, id, data, appActor);
-      createLog(id, f.title, "updated", "");
-      setEditT(null);
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error editing task:", e);
-      showToast("Error al editar la tarea");
-      throw new Error(e?.message || "Firebase rechazó la edición de la tarea.");
-    }
-  }
-
-  async function patchTask(id, patch) {
-    const previousDetail = detailT;
-    setDetailT((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
-    if (isLocalDemo) {
-      setTasks((prev) => prev.map((t) => (t.id === id ? { ...t, ...patch } : t)));
-      const currentTasks = tasksRef.current;
-      const task = currentTasks.find((t) => t.id === id);
-      const logTitle = patch.title || task?.title || "Tarea";
-      createLocalLog(id, logTitle, "updated", `Campo: ${Object.keys(patch).join(", ")}`);
-      return;
-    }
-    const currentTasks = tasksRef.current;
-    const task = currentTasks.find((t) => t.id === id);
-    try {
-      await taskService.updateTask(activeBoardId, id, patch, appActor);
-      if (task)
-        createLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
-    } catch (e) {
-      if (import.meta.env.DEV) console.error("Error patching task:", e);
-      setDetailT(previousDetail);
-      showToast("Error al guardar los cambios");
-    }
-  }
-
-  function exportCSV(
-    sourceTasks = tasks.filter((t) => !t.archived),
-    filename = "kanban-it-tasks.csv",
-  ) {
-    const headers =
-      [
-        "Título",
-        "Sistema",
-        "Tipo",
-        "Impacto",
-        "Urgencia",
-        "SLA horas",
-        "Vencimiento",
-        "Módulo",
-        "Fase",
-        "Prioridad",
-        "Esfuerzo",
-        "Estado",
-        "Decisión manager",
-        "Asignado",
-        "Solicitante",
-        "Checklist",
-      ]
-        .map(csvCell)
-        .join(",") + "\n";
-    const rows = sourceTasks
-      .map((t) => {
-        const checklist = checklistProgress(t);
-        const operational = operationalStates[getOperationalState(t)]?.label || "Normal";
-        return [
-          t.title,
-          t.system || "",
-          t.ticketType || "",
-          t.impact || "",
-          t.urgency || "",
-          t.slaHours || "",
-          t.dueDate || "",
-          t.module,
-          `${t.phase} - ${phaseMap[t.phase] || ""}`,
-          t.priority,
-          t.effort,
-          t.status,
-          operational,
-          t.assignedName || "",
-          t.requester || "",
-          checklist.total ? `${checklist.done}/${checklist.total}` : "",
-        ]
-          .map(csvCell)
-          .join(",");
-      })
-      .join("\n");
-    const blob = new Blob(["\ufeff" + headers + rows], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(url), 10000);
-  }
-
-  function exportVisibleCSV() {
-    exportCSV(displayedTasks, "kanban-it-report-visible.csv");
-  }
-
-  function printReport() {
-    const previousTitle = document.title;
-    document.title = `${APP_NAME} - Reporte`;
-    window.print();
-    window.setTimeout(() => {
-      document.title = previousTitle;
-    }, 250);
-  }
-
-  function toggleCollapse(s) {
-    setCollapsed((c) => ({ ...c, [s]: !c[s] }));
-  }
-
-  function openAddTask(status = "Pendiente") {
-    setNewTaskStatus(status);
-    setShowAdd(true);
-  }
-
-  function resetLocalDemo() {
-    if (!confirm("¿Resetear datos locales demo?")) return;
-    localStorage.removeItem(LOCAL_TASKS_KEY);
-    Object.keys(localStorage)
-      .filter((key) => key.startsWith(`${LOCAL_TASKS_KEY}.`))
-      .forEach((key) => localStorage.removeItem(key));
-    localStorage.removeItem(LOCAL_COMMENTS_KEY);
-    localStorage.removeItem(LOCAL_IT_CONFIG_KEY);
-    localStorage.removeItem(LOCAL_LOGS_KEY);
-    setItConfig(defaultItConfig);
-    setTasks(initialTasks.map((t, idx) => enrichLocalTask(t, idx, defaultItConfig)));
-  }
-
-  function handleSidebarAction(action) {
-    if (action === "all") {
-      setMyWorkOnly(false);
-      setCommentsOnly(false);
-      setShowArchived(false);
-      setOverdueOnly(false);
-      setSearchQuery("");
-      setMod("Todos");
-      setPrio("Todas");
-      setPhase("Todas");
-      setSystemFilter("Todos");
-      setTypeFilter("Todos");
-      setSlaFilter("Todos");
-      setResponsibleFilter("Todos");
-      setOpsFilter("all");
-      setViewMode("board");
-    }
-    if (action === "my-work") {
-      setMyWorkOnly(true);
-      setCommentsOnly(false);
-      setShowArchived(false);
-      setOverdueOnly(false);
-      setOpsFilter("all");
-      setViewMode("list");
-    }
-    if (action === "comments") {
-      setCommentsOnly(true);
-      setViewMode("list");
-      setMyWorkOnly(false);
-      setSearchQuery("");
-      setShowArchived(false);
-      setOverdueOnly(false);
-      setOpsFilter("all");
-    }
-    if (action === "notifications") {
-      setShowArchived(false);
-      setMyWorkOnly(false);
-      setCommentsOnly(false);
-      setOverdueOnly(false);
-      const nextFilter =
-        operationalMetrics.overdue > 0
-          ? "overdue"
-          : operationalMetrics.blocked > 0
-            ? "blocked"
-            : operationalMetrics.urgent > 0
-              ? "urgent"
-              : operationalMetrics.ready > 0
-                ? "ready"
-                : "all";
-      setOpsFilter(nextFilter);
-      setViewMode("list");
-    }
-  }
-
-  const activeBoardName = useMemo(() => {
-    const b = appBoards.find((b) => b.id === appActiveBoardId);
-    return b ? displayBoardName(b.name) : APP_NAME;
-  }, [appBoards, appActiveBoardId]);
-
-  const hasActiveViewFilters =
-    searchQuery ||
-    mod !== "Todos" ||
-    prio !== "Todas" ||
-    phase !== "Todas" ||
-    systemFilter !== "Todos" ||
-    typeFilter !== "Todos" ||
-    slaFilter !== "Todos" ||
-    responsibleFilter !== "Todos" ||
-    opsFilter !== "all" ||
-    myWorkOnly ||
-    commentsOnly ||
-    overdueOnly;
-
-  function clearViewFilters() {
-    setMyWorkOnly(false);
-    setOverdueOnly(false);
-    setSearchQuery("");
-    setMod("Todos");
-    setPrio("Todas");
-    setPhase("Todas");
-    setSystemFilter("Todos");
-    setTypeFilter("Todos");
-    setSlaFilter("Todos");
-    setResponsibleFilter("Todos");
-    setOpsFilter("all");
-    setCommentsOnly(false);
   }
 
   if (loading) return <LoadingScreen />;
