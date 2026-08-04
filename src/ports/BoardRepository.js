@@ -26,6 +26,14 @@ export class BoardRepository {
   }
 
   /**
+   * @param {string} boardId
+   * @returns {Promise<import("../core/domain/entities/board.js").Board|null>}
+   */
+  async get(boardId) {
+    throw new Error("BoardRepository.get not implemented");
+  }
+
+  /**
    * @param {import("../core/domain/entities/board.js").Board} board
    * @returns {Promise<import("../core/domain/entities/board.js").Board>}
    */

@@ -22,6 +22,10 @@ export class LocalStorageBoardRepository extends BoardRepository {
     return () => {};
   }
 
+  async get(boardId) {
+    return this.listBoards().find((b) => b.id === boardId) || null;
+  }
+
   async create(board) {
     const boards = this.listBoards();
     if (boards.some((b) => b.name.toLowerCase() === String(board.name).toLowerCase())) {

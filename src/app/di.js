@@ -38,7 +38,7 @@ function build() {
   const users = useLocal ? new LocalStorageUserRepository() : new FirebaseUserRepository();
   return {
     env: useLocal ? "local" : "firebase",
-    taskService: new TaskUseCases(task),
+    taskService: new TaskUseCases(task, board),
     boardService: new BoardUseCases(board),
     authService: new AuthUseCases(auth),
     auditService: new AuditUseCases(audit),

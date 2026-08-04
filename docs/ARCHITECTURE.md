@@ -319,36 +319,37 @@ npm run dev      # local mode (localStorage) without regressions
 
 ### ES
 
-- **Permisos UI vs reglas de Firestore**: la UI permite a usuarios con `jobTitle` de nivel
-  `editor` editar tareas completas (`appCanEdit` en `src/App.jsx`), pero `firestore.rules` solo
-  permite a los miembros **no operadores** actualizar los campos
-  `["status", "operationalState", "order", "commentsCount", "updatedAt"]`. Como resultado, un
-  editor que intente modificar título, módulo, fechas, etc., verá rechazada la escritura por
-  Firestore. Lo mismo aplica a `archiveTask` (el campo `archived` no está permitido para
-  miembros no operadores).
-  - **Decisión**: dejar el comportamiento actual y resolverlo en P1 mediante saneamiento de
-    patches por rol en `TaskUseCases.updateTask` (punto único de validación). No cambiar reglas
-    ni UI por ahora.
-- **Comentarios/adjuntos, mensajes y usuarios**: `TaskDetail`, `ChatPanel` y el listener de
-  `users` + `AdminPanel` siguen escribiendo directo a Firestore; aún no tienen ports.
-- **Jerarquía de roles** (`jobTitleHierarchy` en `itConfig`) se evalúa en la capa de
-  presentación; migrar a dominio/aplicación en P1.
+- ~~Permisos UI vs reglas de Firestore~~ **Resuelto en P1**: `TaskUseCases.updateTask` sanea el
+  patch según el actor (`isManager` o propietario del board), alineado con `firestore.rules`. Un
+  miembro no operador solo puede escribir `["status", "operationalState", "order",
+  "commentsCount"]`; si el patch queda vacío, no escribe (no-op silencioso, sin error en la UI).
+  La regla de avance de estados para no operadores la sigue aplicando Firestore. La UI mantiene
+  `appCanEdit` (no cambia).
+- ~~Comentarios / mensajes / usuarios~~ **Resuelto en P1**: `CommentRepository`,
+  `MessageRepository` y `UserRepository` con adapters Firebase/local; `TaskDetail`, `ChatPanel`,
+  el listener de `users` en `App.jsx` y `AdminPanel` usan servicios vía DI.
+- ~~Jerarquía de roles~~ **Resuelto en P1**: `jobTitleHierarchy` migrado a
+  `core/domain/constants/roles.js` con `isManager`, `effectiveLevel`, `canCreate`,
+  `canFullEdit`; `src/constants/defaultItConfig.js` re-exporta desde el dominio (fuente única).
+- **Adjuntos**: `TaskDetail` sigue subiendo/eliminando archivos directo a Firebase Storage
+  (aún sin port); diferido a una fase posterior.
 - **`App.jsx`** sigue siendo un orquestador grande; el siguiente paso es dividir en vistas y
   hooks bajo `src/presentation/`.
 
 ### EN
 
-- **UI permissions vs Firestore rules**: the UI lets users whose `jobTitle` level is `editor`
-  edit full tasks (`appCanEdit` in `src/App.jsx`), but `firestore.rules` only allows
-  non-operator members to update `["status", "operationalState", "order", "commentsCount",
-  "updatedAt"]`. As a result, an editor trying to change title, module, dates, etc. will have
-  the write rejected by Firestore. The same applies to `archiveTask` (`archived` is not allowed
-  for non-operator members).
-  - **Decision**: keep current behavior and resolve in P1 with per-role patch sanitization in
-    `TaskUseCases.updateTask` (single validation point). Do not change rules or UI for now.
-- **Comments/attachments, messages and users**: `TaskDetail`, `ChatPanel` and the `users`
-  listener + `AdminPanel` still write directly to Firestore; no ports yet.
-- **Role hierarchy** (`jobTitleHierarchy` in `itConfig`) is evaluated in the presentation layer;
-  move to domain/application in P1.
+- ~~UI permissions vs Firestore rules~~ **Resolved in P1**: `TaskUseCases.updateTask` sanitizes
+  the patch per actor (`isManager` or board owner), aligned with `firestore.rules`. Non-operator
+  members can only write `["status", "operationalState", "order", "commentsCount"]`; if the
+  patch becomes empty it is skipped (silent no-op, no UI error). The forward-only status rule for
+  non-operators is still enforced by Firestore. The UI keeps `appCanEdit` (unchanged).
+- ~~Comments / messages / users~~ **Resolved in P1**: `CommentRepository`,
+  `MessageRepository` and `UserRepository` with Firebase/local adapters; `TaskDetail`,
+  `ChatPanel`, the `users` listener in `App.jsx` and `AdminPanel` now use services via DI.
+- ~~Role hierarchy~~ **Resolved in P1**: `jobTitleHierarchy` moved to
+  `core/domain/constants/roles.js` with `isManager`, `effectiveLevel`, `canCreate`,
+  `canFullEdit`; `src/constants/defaultItConfig.js` re-exports from the domain (single source).
+- **Attachments**: `TaskDetail` still uploads/deletes files directly to Firebase Storage (no
+  port yet); deferred to a later phase.
 - **`App.jsx`** is still a large orchestrator; next step is splitting into views and hooks under
   `src/presentation/`.

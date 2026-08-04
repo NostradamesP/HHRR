@@ -190,6 +190,14 @@ export default function NoraHRKanban() {
   const appCanCreate =
     appIsAdmin || appRole === "manager" || appUserLevel === "manager" || appUserLevel === "admin";
   const appCanEdit = appCanCreate || appUserLevel === "editor";
+  const appActor = useMemo(
+    () => ({
+      uid: appUser?.uid || null,
+      role: appUserData?.role,
+      jobTitle: appUserData?.jobTitle,
+    }),
+    [appUser?.uid, appUserData?.role, appUserData?.jobTitle],
+  );
   const activeTask = useMemo(() => tasks.find((t) => t.id === activeId), [activeId, tasks]);
   const boardsRef = useRef(appBoards);
   const tasksRef = useRef(tasks);
@@ -249,7 +257,7 @@ export default function NoraHRKanban() {
         if (missingOrder.length > 0) {
           Promise.allSettled(
             missingOrder.map((t) =>
-              taskService.updateTask(activeBoardId, t.id, { order: Date.now() }),
+              taskService.updateTask(activeBoardId, t.id, { order: Date.now() }, appActor),
             ),
           );
         }
@@ -260,7 +268,7 @@ export default function NoraHRKanban() {
       },
     );
     return unsub;
-  }, [user, activeBoardId, isLocalDemo, showToast, itConfig, taskService]);
+  }, [user, activeBoardId, isLocalDemo, showToast, itConfig, taskService, appActor]);
 
   useEffect(() => {
     if (!isLocalDemo || !localLoaded.current) return;
@@ -518,7 +526,7 @@ export default function NoraHRKanban() {
       return;
     }
     try {
-      await taskService.updateTask(activeBoardId, id, { archived });
+      await taskService.updateTask(activeBoardId, id, { archived }, appActor);
       createLog(id, task.title, archived ? "archived" : "restored", "");
     } catch (e) {
       if (import.meta.env.DEV) console.error("Error archiving task:", e);
@@ -620,7 +628,7 @@ export default function NoraHRKanban() {
         const updates = { order: newOrder };
         if (newStatus) updates.status = newStatus;
         Object.assign(updates, opPatch);
-        await taskService.updateTask(activeBoardId, taskId, updates);
+        await taskService.updateTask(activeBoardId, taskId, updates, appActor);
         if (newStatus)
           createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
@@ -655,7 +663,7 @@ export default function NoraHRKanban() {
         status: s,
         ...opPatch,
         order: Date.now(),
-      });
+      }, appActor);
       createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
     } catch (e) {
       if (import.meta.env.DEV) console.error("Error updating status:", e);
@@ -779,7 +787,7 @@ export default function NoraHRKanban() {
     }
     try {
       const { id, ...data } = f;
-      await taskService.updateTask(activeBoardId, id, data);
+      await taskService.updateTask(activeBoardId, id, data, appActor);
       createLog(id, f.title, "updated", "");
       setEditT(null);
     } catch (e) {
@@ -803,7 +811,7 @@ export default function NoraHRKanban() {
     const currentTasks = tasksRef.current;
     const task = currentTasks.find((t) => t.id === id);
     try {
-      await taskService.updateTask(activeBoardId, id, patch);
+      await taskService.updateTask(activeBoardId, id, patch, appActor);
       if (task)
         createLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
     } catch (e) {

@@ -7,6 +7,7 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   serverTimestamp,
   arrayUnion,
@@ -58,6 +59,11 @@ export class FirebaseBoardRepository extends BoardRepository {
         );
       },
     );
+  }
+
+  async get(boardId) {
+    const snap = await getDoc(doc(db, "boards", boardId));
+    return snap.exists() ? { id: snap.id, ...snap.data() } : null;
   }
 
   async create(board) {

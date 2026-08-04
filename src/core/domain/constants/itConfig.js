@@ -1,3 +1,5 @@
+import { JOB_TITLE_HIERARCHY } from "./roles";
+
 export const defaultItConfig = {
   systems: ["Network", "Microsoft 365", "Active Directory", "Firewall", "Endpoints", "ERP"],
   ticketTypes: ["Incidente", "Cambio", "Mantenimiento", "Acceso", "Proyecto"],
@@ -16,16 +18,5 @@ export const defaultItConfig = {
     "Help Desk Analyst",
     "IT Auditor",
   ],
-  jobTitleHierarchy: {
-    "IT Project Manager": "manager",
-    "System Administrator": "admin",
-    Ciberseguridad: "admin",
-    "DevOps Engineer": "editor",
-    "Network Engineer": "editor",
-    "Database Administrator": "editor",
-    "Cloud Architect": "editor",
-    "Soporte Técnico": "viewer",
-    "Help Desk Analyst": "viewer",
-    "IT Auditor": "viewer",
-  },
+  jobTitleHierarchy: JOB_TITLE_HIERARCHY,
 };
