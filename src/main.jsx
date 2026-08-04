@@ -3,14 +3,17 @@ import { createRoot } from "react-dom/client";
 import "./styles.css";
 import { AuthProvider } from "./AuthContext";
 import { BoardProvider } from "./BoardContext";
+import { ServicesProvider } from "./presentation/context/ServicesContext";
 import NoraHRRoadmap from "./App.jsx";
 
 createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AuthProvider>
-      <BoardProvider>
-        <NoraHRRoadmap />
-      </BoardProvider>
-    </AuthProvider>
+    <ServicesProvider>
+      <AuthProvider>
+        <BoardProvider>
+          <NoraHRRoadmap />
+        </BoardProvider>
+      </AuthProvider>
+    </ServicesProvider>
   </React.StrictMode>,
 );

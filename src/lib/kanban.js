@@ -17,28 +17,4 @@ export function useKanbanSensors() {
   );
 }
 
-export function filterTasks(tasks, q, mod, prio, ph) {
-  const cq = q.trim().toLowerCase();
-  return tasks.filter((t) => {
-    const st = [
-      t.title,
-      t.module,
-      t.phase,
-      t.priority,
-      t.description,
-      t.system,
-      t.ticketType,
-      t.requester,
-      t.impact,
-      t.urgency,
-    ]
-      .join(" ")
-      .toLowerCase();
-    return (
-      (cq === "" || st.includes(cq)) &&
-      (mod === "Todos" || t.module === mod) &&
-      (prio === "Todas" || t.priority === prio) &&
-      (ph === "Todas" || t.phase === ph)
-    );
-  });
-}
+export { filterTasks } from "../core/domain/services/filterService";

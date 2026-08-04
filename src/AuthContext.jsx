@@ -1,32 +1,19 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import {
-  onAuthStateChanged,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut,
-} from "firebase/auth";
-import { doc, getDoc, setDoc } from "firebase/firestore";
-import { auth, db } from "./firebase";
+import { useServices } from "./presentation/context/ServicesContext";
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
+  const { authService } = useServices();
   const [user, setUser] = useState(null);
   const [userData, setUserData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!auth) {
-      setUser(null);
-      setUserData(null);
-      setLoading(false);
-      return;
-    }
-
     let mounted = true;
     let pendingUserUid = null;
 
-    const unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsub = authService.subscribeAuth(async (firebaseUser) => {
       if (!mounted) return;
       const currentUid = firebaseUser?.uid || null;
       pendingUserUid = currentUid;
@@ -34,22 +21,21 @@ export function AuthProvider({ children }) {
 
       if (firebaseUser) {
         try {
-          let snap = await getDoc(doc(db, "users", currentUid));
+          let data = await authService.getUserData(currentUid);
           if (!mounted) return;
-
           if (pendingUserUid !== currentUid) return;
 
-          if (snap.exists()) {
-            setUserData(snap.data());
+          if (data) {
+            setUserData(data);
           } else {
-            const data = {
+            data = {
               email: firebaseUser.email,
               name: firebaseUser.email.split("@")[0],
               role: "member",
               jobTitle: "Soporte Técnico",
               createdAt: new Date().toISOString(),
             };
-            await setDoc(doc(db, "users", currentUid), data);
+            await authService.saveUserData(currentUid, data);
             if (mounted) setUserData(data);
           }
         } catch (e) {
@@ -66,29 +52,18 @@ export function AuthProvider({ children }) {
       mounted = false;
       unsub();
     };
-  }, []);
+  }, [authService]);
 
   async function login(email, password) {
-    const cred = await signInWithEmailAndPassword(auth, email, password);
-    return cred.user;
+    return authService.signIn(email, password);
   }
 
   async function signup(email, password, name) {
-    const cred = await createUserWithEmailAndPassword(auth, email, password);
-    const data = {
-      email,
-      name: name || email.split("@")[0],
-      role: "member",
-      jobTitle: "Soporte Técnico",
-      createdAt: new Date().toISOString(),
-    };
-    await setDoc(doc(db, "users", cred.user.uid), data);
-    setUserData(data);
-    return cred.user;
+    return authService.signUp(email, password, name);
   }
 
   async function logout() {
-    await signOut(auth);
+    await authService.signOut();
   }
 
   const isAdmin = userData?.role === "admin";
