@@ -17,9 +17,9 @@ export class TaskUseCases {
     return this.taskRepository.list(boardId);
   }
 
-  /** @param {string} boardId @param {(tasks) => void} onNext @returns {() => void} */
-  subscribeTasks(boardId, onNext) {
-    return this.taskRepository.subscribe(boardId, onNext);
+  /** @param {string} boardId @param {(tasks) => void} onNext @param {(err) => void} onError @returns {() => void} */
+  subscribeTasks(boardId, onNext, onError) {
+    return this.taskRepository.subscribe(boardId, onNext, onError);
   }
 
   /** @param {string} boardId @param {object} input @returns {Promise<import("../core/domain/entities/task.js").Task>} */

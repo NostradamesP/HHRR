@@ -1,4 +1,4 @@
-import { collection, addDoc, query, orderBy, getDocs } from "firebase/firestore";
+import { collection, addDoc, query, orderBy, getDocs, serverTimestamp } from "firebase/firestore";
 import { AuditLogger } from "../../ports/AuditLogger";
 import { db } from "../../firebase";
 
@@ -12,7 +12,7 @@ export class FirebaseAuditLogger extends AuditLogger {
       details: entry.details || "",
       userId: entry.actor || "",
       userName: entry.actorName || "",
-      createdAt: entry.timestamp || new Date().toISOString(),
+      createdAt: entry.timestamp || serverTimestamp(),
     });
   }
 

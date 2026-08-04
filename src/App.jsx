@@ -8,18 +8,7 @@ import {
   useSensors,
 } from "@dnd-kit/core";
 import { sortableKeyboardCoordinates } from "@dnd-kit/sortable";
-import {
-  collection,
-  onSnapshot,
-  query,
-  orderBy,
-  addDoc,
-  updateDoc,
-  deleteDoc,
-  doc,
-  serverTimestamp,
-  limit,
-} from "firebase/firestore";
+import { collection, onSnapshot, query, limit } from "firebase/firestore";
 import {
   Archive,
   BarChart3,
@@ -45,6 +34,7 @@ import {
 import { db } from "./firebase";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
+import { useServices } from "./presentation/context/ServicesContext";
 import Sidebar from "./Sidebar";
 import { APP_MONOGRAM, APP_NAME, displayBoardName } from "./branding";
 
@@ -114,6 +104,7 @@ import LoginModal from "./components/landing/LoginModal";
 export default function NoraHRKanban() {
   const { user, userData, loading, logout, isAdmin } = useAuth();
   const { activeBoardId, boards } = useBoard();
+  const { taskService, auditService } = useServices();
   const isLocalDemo = !user && ["localhost", "127.0.0.1"].includes(window.location.hostname);
   const appUser =
     user || (isLocalDemo ? { uid: "local-demo-user", email: "demo@norahr.local" } : null);
@@ -227,11 +218,9 @@ export default function NoraHRKanban() {
     tasksRef.current = [];
     setDetailT(null);
     setActiveId(null);
-    const q = query(collection(db, "boards", activeBoardId, "tasks"), orderBy("order", "asc"));
-    const unsub = onSnapshot(
-      q,
-      (snap) => {
-        const ts = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    const unsub = taskService.subscribeTasks(
+      activeBoardId,
+      (ts) => {
         setTasks(ts);
         tasksRef.current = ts;
         setDetailT((prev) => {
@@ -243,7 +232,7 @@ export default function NoraHRKanban() {
         if (missingOrder.length > 0) {
           Promise.allSettled(
             missingOrder.map((t) =>
-              updateDoc(doc(db, "boards", activeBoardId, "tasks", t.id), { order: Date.now() }),
+              taskService.updateTask(activeBoardId, t.id, { order: Date.now() }),
             ),
           );
         }
@@ -254,7 +243,7 @@ export default function NoraHRKanban() {
       },
     );
     return unsub;
-  }, [user, activeBoardId, isLocalDemo, showToast, itConfig]);
+  }, [user, activeBoardId, isLocalDemo, showToast, itConfig, taskService]);
 
   useEffect(() => {
     if (!isLocalDemo || !localLoaded.current) return;
@@ -465,14 +454,14 @@ export default function NoraHRKanban() {
     if (isLocalDemo) return;
     if (!user || !activeBoardId) return;
     try {
-      await addDoc(collection(db, "boards", activeBoardId, "logs"), {
+      await auditService.log({
+        boardId: activeBoardId,
         action,
         taskId,
         taskTitle,
         details: details || "",
-        userId: user.uid,
-        userName: userData?.name || user.email,
-        createdAt: serverTimestamp(),
+        actor: user.uid,
+        actorName: userData?.name || user.email,
       });
     } catch (e) {
       if (import.meta.env.DEV) console.error("Error creating log:", e);
@@ -516,10 +505,7 @@ export default function NoraHRKanban() {
       return;
     }
     try {
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), {
-        archived,
-        updatedAt: serverTimestamp(),
-      });
+      await taskService.updateTask(activeBoardId, id, { archived });
       createLog(id, task.title, archived ? "archived" : "restored", "");
     } catch (e) {
       if (import.meta.env.DEV) console.error("Error archiving task:", e);
@@ -618,10 +604,10 @@ export default function NoraHRKanban() {
         return;
       }
       try {
-        const updates = { updatedAt: serverTimestamp(), order: newOrder };
+        const updates = { order: newOrder };
         if (newStatus) updates.status = newStatus;
         Object.assign(updates, opPatch);
-        await updateDoc(doc(db, "boards", activeBoardId, "tasks", taskId), updates);
+        await taskService.updateTask(activeBoardId, taskId, updates);
         if (newStatus)
           createLog(taskId, task.title, "status_changed", `${task.status} → ${newStatus}`);
       } catch (e) {
@@ -652,11 +638,10 @@ export default function NoraHRKanban() {
       return;
     }
     try {
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), {
+      await taskService.updateTask(activeBoardId, id, {
         status: s,
         ...opPatch,
         order: Date.now(),
-        updatedAt: serverTimestamp(),
       });
       createLog(id, task.title, "status_changed", `${task.status} → ${s}`);
     } catch (e) {
@@ -677,7 +662,7 @@ export default function NoraHRKanban() {
       return;
     }
     try {
-      await deleteDoc(doc(db, "boards", activeBoardId, "tasks", id));
+      await taskService.deleteTask(activeBoardId, id);
       if (task) createLog(id, task.title, "deleted", "");
     } catch (e) {
       if (import.meta.env.DEV) console.error("Error deleting task:", e);
@@ -729,7 +714,7 @@ export default function NoraHRKanban() {
       throw new Error("No hay un board activo para crear la tarea.");
     }
     try {
-      const ref = await addDoc(collection(db, "boards", activeBoardId, "tasks"), {
+      const ref = await taskService.createTask(activeBoardId, {
         title: f.title,
         module: f.module,
         phase: f.phase,
@@ -749,15 +734,13 @@ export default function NoraHRKanban() {
         impact: f.impact || "",
         urgency: f.urgency || "",
         slaHours: f.slaHours || "",
-          checklist: f.checklist || makeChecklist(f.title),
-          commentsCount: 0,
-          operationalState: f.operationalState || "normal",
-          blockedReason: f.blockedReason || "",
-          attachments: [],
-          createdBy: user.uid,
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
+        checklist: f.checklist || makeChecklist(f.title),
+        commentsCount: 0,
+        operationalState: f.operationalState || "normal",
+        blockedReason: f.blockedReason || "",
+        attachments: [],
+        createdBy: user.uid,
+      });
       createLog(ref.id, f.title, "created", "");
       setShowAdd(false);
       setNewTaskStatus("Pendiente");
@@ -783,10 +766,7 @@ export default function NoraHRKanban() {
     }
     try {
       const { id, ...data } = f;
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
+      await taskService.updateTask(activeBoardId, id, data);
       createLog(id, f.title, "updated", "");
       setEditT(null);
     } catch (e) {
@@ -810,10 +790,7 @@ export default function NoraHRKanban() {
     const currentTasks = tasksRef.current;
     const task = currentTasks.find((t) => t.id === id);
     try {
-      await updateDoc(doc(db, "boards", activeBoardId, "tasks", id), {
-        ...patch,
-        updatedAt: serverTimestamp(),
-      });
+      await taskService.updateTask(activeBoardId, id, patch);
       if (task)
         createLog(id, task.title, "updated", `Campo actualizado: ${Object.keys(patch).join(", ")}`);
     } catch (e) {

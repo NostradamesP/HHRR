@@ -24,10 +24,14 @@ export class FirebaseTaskRepository extends TaskRepository {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   }
 
-  subscribe(boardId, onNext) {
-    return onSnapshot(query(tasksCol(boardId), orderBy("order", "asc")), (snap) => {
-      onNext(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-    });
+  subscribe(boardId, onNext, onError) {
+    return onSnapshot(
+      query(tasksCol(boardId), orderBy("order", "asc")),
+      (snap) => {
+        onNext(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      },
+      onError,
+    );
   }
 
   async create(boardId, task) {
@@ -38,6 +42,7 @@ export class FirebaseTaskRepository extends TaskRepository {
     const ref = await addDoc(tasksCol(boardId), {
       ...data,
       createdAt: data.createdAt || serverTimestamp(),
+      updatedAt: serverTimestamp(),
     });
     return { ...task, id: ref.id };
   }
