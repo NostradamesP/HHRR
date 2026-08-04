@@ -4,6 +4,7 @@ export const LOCAL_IT_CONFIG_KEY = "norahr.local.itConfig";
 export const LOCAL_LOGS_KEY = "norahr.local.logs";
 export const LOCAL_ATTACHMENTS_KEY = "norahr.local.attachments";
 export const LOCAL_BOARDS_KEY = "norahr.local.boards";
+export const LOCAL_BOARD_MESSAGES_KEY = "norahr.local.boardMessages";
 export const LOCAL_ACTIVE_BOARD_KEY = "activeBoardId";
 
 export const DEFAULT_LOCAL_BOARD_ID = "local-demo-board";
