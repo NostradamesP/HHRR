@@ -46,6 +46,9 @@ export default function SortableCard({
       style={cardStyle}
       {...attributes}
       {...listeners}
+      role={!isAdmin || deleteMode ? "button" : undefined}
+      tabIndex={!isAdmin || deleteMode ? 0 : undefined}
+      onKeyDown={!isAdmin || deleteMode ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onSelect(task); } } : undefined}
       onClick={openCard}
       className={`group relative rounded-lg border border-slate-200/80 bg-white px-2 md:px-2.5 py-1.5 md:py-2 shadow-[0_1px_2px_rgba(15,23,42,0.06)] transition-all ${borderClass} ${isAdmin && !deleteMode ? "cursor-grab active:cursor-grabbing" : deleteMode ? "cursor-default" : "cursor-pointer"} ${isDragging ? "z-50 rotate-1 scale-[1.02] shadow-xl ring-2 ring-cyan-300 opacity-40" : "opacity-0-initial animate-fade-in-up hover:border-slate-300 hover:shadow-md"}`}
     >

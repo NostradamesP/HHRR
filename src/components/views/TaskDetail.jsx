@@ -46,6 +46,7 @@ import {
   readLocalJSON,
   writeLocalJSON,
   cleanValue,
+  sanitizeText,
   displayPersonName,
   fileToBase64,
   formatFileSize,
@@ -171,7 +172,7 @@ export default function TaskDetail({
         setLogs(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
       },
       (err) => {
-        console.error("Logs listener error:", err);
+        if (import.meta.env.DEV) console.error("Logs listener error:", err);
       },
     );
     return unsub;
@@ -184,14 +185,14 @@ export default function TaskDetail({
       task.id,
       (next) => setComments(next),
       (err) => {
-        console.error("Comments listener error:", err);
+        if (import.meta.env.DEV) console.error("Comments listener error:", err);
       },
     );
   }, [task.id, activeBoardId, commentService]);
 
   async function sendComment(e) {
     e.preventDefault();
-    const text = commentText.trim();
+    const text = sanitizeText(commentText);
     if (!text || !detailUser) return;
     try {
       const created = await commentService.addComment(activeBoardId, task.id, {
@@ -205,7 +206,7 @@ export default function TaskDetail({
       }
       setCommentText("");
     } catch (err) {
-      console.error("Error creating comment:", err);
+      if (import.meta.env.DEV) console.error("Error creating comment:", err);
     }
   }
 
@@ -315,7 +316,7 @@ export default function TaskDetail({
       const updated = [...currentAttachments, attachment];
       onTaskPatch?.(task.id, { attachments: updated });
     } catch (err) {
-      console.error("Upload error:", err);
+      if (import.meta.env.DEV) console.error("Upload error:", err);
       setUploadError("Error al subir el archivo. Intenta de nuevo.");
     } finally {
       setUploading(false);
@@ -357,7 +358,7 @@ export default function TaskDetail({
       const updated = existingAttachments.filter((a) => a.path !== attachment.path);
       onTaskPatch?.(task.id, { attachments: updated });
     } catch (err) {
-      console.error("Delete error:", err);
+      if (import.meta.env.DEV) console.error("Delete error:", err);
     }
   }
 
@@ -434,6 +435,7 @@ export default function TaskDetail({
           value={commentText}
           onChange={(e) => setCommentText(e.target.value)}
           placeholder="Comenta o menciona contexto para esta tarea..."
+          maxLength={2000}
           className="min-w-0 flex-1 bg-transparent px-2 py-2 text-xs outline-none placeholder:text-slate-300"
         />
         <button
@@ -551,6 +553,7 @@ export default function TaskDetail({
                             value={task.title || ""}
                             onChange={(e) => updateField("title", e.target.value)}
                             rows={2}
+                            maxLength={200}
                             className="mt-1 w-full resize-none rounded-lg border border-transparent bg-transparent px-1 text-2xl font-bold leading-tight text-slate-950 outline-none hover:border-slate-200 focus:border-cyan-400"
                           />
                         ) : (
@@ -637,6 +640,7 @@ export default function TaskDetail({
                           value={task.blockedReason || ""}
                           onChange={(e) => updateField("blockedReason", e.target.value)}
                           placeholder="Dependencia, proveedor, acceso..."
+                          maxLength={500}
                           className={mutedInput}
                         />
                       ) : (
@@ -654,6 +658,7 @@ export default function TaskDetail({
                         value={task.description || ""}
                         onChange={(e) => updateField("description", e.target.value)}
                         rows={4}
+                        maxLength={5000}
                         placeholder="Add description"
                         className="min-h-[116px] w-full resize-none rounded-b-xl bg-white px-4 py-4 text-sm leading-7 text-slate-600 outline-none placeholder:text-slate-300 focus:bg-slate-50"
                       />
@@ -812,6 +817,7 @@ export default function TaskDetail({
                             <input
                               value={item.text}
                               onChange={(e) => updateChecklistItem(item.id, e.target.value)}
+                              maxLength={200}
                               className={`min-w-0 flex-1 bg-transparent text-sm font-semibold outline-none ${item.done ? "text-slate-400 line-through" : "text-slate-700"}`}
                             />
                           ) : (
@@ -847,6 +853,7 @@ export default function TaskDetail({
                               }
                             }}
                             placeholder="Agregar item de checklist"
+                            maxLength={200}
                             className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-cyan-400"
                           />
                           <button
@@ -1003,12 +1010,13 @@ export default function TaskDetail({
                             />
                           </InlineField>
                           <InlineField label="Requester">
-                            <input
-                              value={task.requester || ""}
-                              onChange={(e) => updateField("requester", e.target.value)}
-                              placeholder="Solicitante"
-                              className={mutedInput}
-                            />
+                          <input
+                            value={task.requester || ""}
+                            onChange={(e) => updateField("requester", e.target.value)}
+                            placeholder="Solicitante"
+                            maxLength={100}
+                            className={mutedInput}
+                          />
                           </InlineField>
                         </>
                       ) : (

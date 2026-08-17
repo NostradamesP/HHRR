@@ -7,6 +7,7 @@ export default function EditableCombo({
   onCommit,
   placeholder = "Sin definir",
   className = "",
+  maxLength = 100,
 }) {
   const [draft, setDraft] = useState(value || "");
   const listIdRef = useRef(`combo-${Math.random().toString(36).slice(2)}`);
@@ -35,6 +36,7 @@ export default function EditableCombo({
           }
         }}
         placeholder={placeholder}
+        maxLength={maxLength}
         className={className}
       />
       <datalist id={listIdRef.current}>

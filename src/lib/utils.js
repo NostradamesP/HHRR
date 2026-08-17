@@ -55,4 +55,4 @@ export {
   reportSummary,
 } from "../core/domain/services/taskService";
 export { groupCounts, uniqueOptions } from "../core/domain/services/filterService";
-export { cleanValue, displayPersonName } from "../core/domain/services/formatService";
+export { cleanValue, sanitizeText, displayPersonName } from "../core/domain/services/formatService";

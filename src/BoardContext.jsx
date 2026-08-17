@@ -23,7 +23,7 @@ function safeSetItem(key, value) {
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.warn("localStorage write failed:", e);
+    if (import.meta.env.DEV) console.warn("localStorage write failed:", e);
   }
 }
 
@@ -88,7 +88,7 @@ export function BoardProvider({ children }) {
             setActiveBoardId(board.id);
           })
           .catch((e) => {
-            console.error("Error creating default board:", e);
+            if (import.meta.env.DEV) console.error("Error creating default board:", e);
           });
       }
 
@@ -140,7 +140,7 @@ export function BoardProvider({ children }) {
       setActiveBoardId(board.id);
       return board.id;
     } catch (e) {
-      console.error("Error creating board:", e);
+      if (import.meta.env.DEV) console.error("Error creating board:", e);
       throw e;
     }
   }
@@ -171,7 +171,7 @@ export function BoardProvider({ children }) {
         }
       }
     } catch (e) {
-      console.error("Error deleting board:", e);
+      if (import.meta.env.DEV) console.error("Error deleting board:", e);
       throw new Error("No se pudo eliminar el board completamente");
     }
   }
@@ -181,7 +181,7 @@ export function BoardProvider({ children }) {
     try {
       await boardService.addMember(boardId, uid);
     } catch (e) {
-      console.error("Error adding member:", e);
+      if (import.meta.env.DEV) console.error("Error adding member:", e);
       throw new Error("No se pudo agregar el miembro");
     }
   }
@@ -191,7 +191,7 @@ export function BoardProvider({ children }) {
     try {
       await boardService.removeMember(boardId, uid);
     } catch (e) {
-      console.error("Error removing member:", e);
+      if (import.meta.env.DEV) console.error("Error removing member:", e);
       throw new Error("No se pudo eliminar el miembro");
     }
   }

@@ -41,6 +41,8 @@ export default function Column({
         <div className="flex items-center gap-2">
           <button
             onClick={() => toggleCollapse(status)}
+            aria-label={collapsed[status] ? `Expandir columna ${status}` : `Colapsar columna ${status}`}
+            aria-expanded={!collapsed[status]}
             className="flex h-8 w-8 md:h-6 md:w-6 items-center justify-center rounded-md text-slate-400 hover:bg-white hover:text-slate-700"
           >
             {collapsed[status] ? (

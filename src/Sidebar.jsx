@@ -72,7 +72,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
     const board = appBoards.find((b) => b.id === boardId);
     if (!confirm(`¿Eliminar el board "${displayBoardName(board?.name)}" y todas sus tareas?`))
       return;
-    deleteBoard(boardId).catch(console.error);
+    deleteBoard(boardId).catch((e) => { if (import.meta.env.DEV) console.error(e); });
   }
 
   const manageBoard = appBoards.find((b) => b.id === manageBoardId);
@@ -171,6 +171,7 @@ export default function Sidebar({ open, onClose, onQuickAction, users: allUsers 
                     }}
                     onKeyDown={(e) => e.key === "Enter" && handleCreate()}
                     placeholder="Nuevo board..."
+                    maxLength={100}
                     className="h-9 min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 text-xs outline-none focus:border-cyan-300 transition-colors"
                   />
                   <button

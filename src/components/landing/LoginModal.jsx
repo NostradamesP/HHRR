@@ -296,6 +296,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                     name="name"
                     autoComplete="name"
                     required
+                    maxLength={100}
                     className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all"
                   />
                 )}
@@ -308,6 +309,7 @@ export default function LoginModal({ isOpen, onClose, onLoginSuccess }) {
                   name="email"
                   inputMode="email"
                   required
+                  maxLength={254}
                   autoComplete="email"
                   className="w-full rounded-xl border border-slate-200 px-4 py-2.5 text-xs outline-none focus:border-slate-900 focus:ring-2 focus:ring-slate-900/10 transition-all"
                 />

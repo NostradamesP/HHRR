@@ -3,6 +3,7 @@ import { X } from "lucide-react";
 import { modules, phaseMap } from "../../constants/meta";
 import { defaultItConfig } from "../../constants/defaultItConfig";
 import { makeChecklist } from "../../lib/utils";
+import { sanitizeText } from "../../lib/utils";
 import { useAuth } from "../../AuthContext";
 
 export default function TaskForm({
@@ -65,9 +66,9 @@ export default function TaskForm({
     setSaving(true);
     setError("");
     try {
-      await onSave({ ...f, title: f.title.trim(), id: initial?.id });
+      await onSave({ ...f, title: sanitizeText(f.title), description: sanitizeText(f.description || ""), requester: sanitizeText(f.requester || ""), id: initial?.id });
     } catch (err) {
-      console.error("Task save failed:", err);
+      if (import.meta.env.DEV) console.error("Task save failed:", err);
       setError(err?.message || "No se pudo guardar la tarea. Revisa permisos o el board activo.");
     } finally {
       setSaving(false);
@@ -83,6 +84,7 @@ export default function TaskForm({
         placeholder="Título"
         value={f.title}
         onChange={(e) => setF({ ...f, title: e.target.value })}
+        maxLength={200}
         className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors"
         autoFocus
       />
@@ -90,6 +92,7 @@ export default function TaskForm({
         placeholder="Descripción (opcional)"
         value={f.description || ""}
         onChange={(e) => setF({ ...f, description: e.target.value })}
+        maxLength={5000}
         className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-xs outline-none focus:border-slate-900 transition-colors"
         rows={2}
       />
@@ -178,6 +181,7 @@ export default function TaskForm({
             value={f.requester || ""}
             onChange={(e) => setF({ ...f, requester: e.target.value })}
             placeholder="Solicitante"
+            maxLength={100}
             className="rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs outline-none focus:border-cyan-400"
           />
           <input
@@ -243,6 +247,7 @@ export default function TaskForm({
               <input
                 value={item.text}
                 onChange={(e) => updateChecklistItem(item.id, { text: e.target.value })}
+                maxLength={200}
                 className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400"
               />
               <button
@@ -265,6 +270,7 @@ export default function TaskForm({
                 }
               }}
               placeholder="Agregar item de checklist"
+              maxLength={200}
               className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs outline-none focus:border-cyan-400"
             />
             <button

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback, Suspense, lazy } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -68,15 +68,15 @@ import ToastNotification from "./components/ui/ToastNotification";
 import Column from "./components/kanban/Column";
 import CardContent from "./components/kanban/CardContent";
 
-// View Components
-import GanttView from "./components/views/GanttView";
-import ReportsView from "./components/views/ReportsView";
-import TaskForm from "./components/views/TaskForm";
-import TaskDetail from "./components/views/TaskDetail";
+// View Components (lazy loaded)
+const GanttView = lazy(() => import("./components/views/GanttView"));
+const ReportsView = lazy(() => import("./components/views/ReportsView"));
+const TaskForm = lazy(() => import("./components/views/TaskForm"));
+const TaskDetail = lazy(() => import("./components/views/TaskDetail"));
 
-// Config Components
-import ITConfigPanel from "./components/config/ITConfigPanel";
-import AdminPanel from "./components/config/AdminPanel";
+// Config Components (lazy loaded)
+const ITConfigPanel = lazy(() => import("./components/config/ITConfigPanel"));
+const AdminPanel = lazy(() => import("./components/config/AdminPanel"));
 
 // Landing Components
 import LandingPage from "./components/landing/LandingPage";
@@ -658,6 +658,7 @@ export default function NoraHRKanban() {
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Buscar tarea, sistema o solicitante..."
+                    maxLength={200}
                     className="h-11 md:h-9 w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 text-xs outline-none transition-colors focus:border-cyan-300"
                   />
                 </div>
@@ -872,23 +873,27 @@ export default function NoraHRKanban() {
                 </div>
               </div>
             ) : viewMode === "gantt" ? (
-              <GanttView
-                tasks={displayedTasks}
-                onSelect={setDetailT}
-                onAdd={openAddTask}
-                canCreate={appCanCreate}
-                canEdit={appCanEdit}
-                onTaskPatch={patchTask}
-              />
+              <Suspense fallback={<div className="flex min-h-[420px] items-center justify-center text-sm text-slate-400">Cargando Gantt...</div>}>
+                <GanttView
+                  tasks={displayedTasks}
+                  onSelect={setDetailT}
+                  onAdd={openAddTask}
+                  canCreate={appCanCreate}
+                  canEdit={appCanEdit}
+                  onTaskPatch={patchTask}
+                />
+              </Suspense>
             ) : viewMode === "reports" ? (
-              <ReportsView
-                tasks={displayedTasks}
-                allTasks={tasks}
-                boardName={activeBoardName}
-                onExport={exportVisibleCSV}
-                onPrint={printReport}
-                onSelect={setDetailT}
-              />
+              <Suspense fallback={<div className="flex min-h-[420px] items-center justify-center text-sm text-slate-400">Cargando reportes...</div>}>
+                <ReportsView
+                  tasks={displayedTasks}
+                  allTasks={tasks}
+                  boardName={activeBoardName}
+                  onExport={exportVisibleCSV}
+                  onPrint={printReport}
+                  onSelect={setDetailT}
+                />
+              </Suspense>
             ) : (
               <>
                 {tasks.length === 0 ? (
@@ -951,69 +956,79 @@ export default function NoraHRKanban() {
         </div>
 
         <Modal open={showAdd} onClose={() => setShowAdd(false)}>
-          <TaskForm
-            onSave={addTask}
-            onClose={() => setShowAdd(false)}
-            users={users}
-            itConfig={itConfig}
-            isLocal={isLocalDemo}
-          />
-        </Modal>
-
-        <Modal open={!!editT} onClose={() => setEditT(null)}>
-          {editT && (
+          <Suspense fallback={<div className="p-8 text-center text-sm text-slate-400">Cargando...</div>}>
             <TaskForm
-              onSave={editTask}
-              onClose={() => setEditT(null)}
-              initial={editT}
+              onSave={addTask}
+              onClose={() => setShowAdd(false)}
               users={users}
               itConfig={itConfig}
               isLocal={isLocalDemo}
             />
+          </Suspense>
+        </Modal>
+
+        <Modal open={!!editT} onClose={() => setEditT(null)}>
+          {editT && (
+            <Suspense fallback={<div className="p-8 text-center text-sm text-slate-400">Cargando...</div>}>
+              <TaskForm
+                onSave={editTask}
+                onClose={() => setEditT(null)}
+                initial={editT}
+                users={users}
+                itConfig={itConfig}
+                isLocal={isLocalDemo}
+              />
+            </Suspense>
           )}
         </Modal>
 
         <Modal open={!!detailT} onClose={() => setDetailT(null)} wide>
           <ErrorBoundary key={detailT?.id}>
             {detailT && (
-              <TaskDetail
-                task={detailT}
-                onDelete={deleteTask}
-                onClose={() => setDetailT(null)}
-                onStatus={updateStatus}
-                onArchive={archiveTask}
-                isAdmin={appCanEdit}
-                activeBoardId={isLocalDemo ? null : activeBoardId}
-                users={users}
-                onTaskPatch={patchTask}
-                itConfig={itConfig}
-                isLocal={isLocalDemo}
-                deletingId={deletingId}
-                onCatalogValue={addCatalogValue}
-                moduleOptions={moduleOptions}
-                phaseOptions={phaseOptions}
-                statusOptions={statusOptions}
-              />
+              <Suspense fallback={<div className="p-8 text-center text-sm text-slate-400">Cargando...</div>}>
+                <TaskDetail
+                  task={detailT}
+                  onDelete={deleteTask}
+                  onClose={() => setDetailT(null)}
+                  onStatus={updateStatus}
+                  onArchive={archiveTask}
+                  isAdmin={appCanEdit}
+                  activeBoardId={isLocalDemo ? null : activeBoardId}
+                  users={users}
+                  onTaskPatch={patchTask}
+                  itConfig={itConfig}
+                  isLocal={isLocalDemo}
+                  deletingId={deletingId}
+                  onCatalogValue={addCatalogValue}
+                  moduleOptions={moduleOptions}
+                  phaseOptions={phaseOptions}
+                  statusOptions={statusOptions}
+                />
+              </Suspense>
             )}
           </ErrorBoundary>
         </Modal>
 
         <Modal open={showItConfig} onClose={() => setShowItConfig(false)}>
-          <ITConfigPanel
-            config={itConfig}
-            onSave={setItConfig}
-            onReset={resetLocalDemo}
-            onClose={() => setShowItConfig(false)}
-          />
+          <Suspense fallback={<div className="p-8 text-center text-sm text-slate-400">Cargando...</div>}>
+            <ITConfigPanel
+              config={itConfig}
+              onSave={setItConfig}
+              onReset={resetLocalDemo}
+              onClose={() => setShowItConfig(false)}
+            />
+          </Suspense>
         </Modal>
 
         <Modal open={showAdmin} onClose={() => setShowAdmin(false)}>
-          <AdminPanel
-            users={users}
-            currentUser={appUser}
-            onClose={() => setShowAdmin(false)}
-            itConfig={itConfig}
-          />
+          <Suspense fallback={<div className="p-8 text-center text-sm text-slate-400">Cargando...</div>}>
+            <AdminPanel
+              users={users}
+              currentUser={appUser}
+              onClose={() => setShowAdmin(false)}
+              itConfig={itConfig}
+            />
+          </Suspense>
         </Modal>
 
         <DragOverlay>

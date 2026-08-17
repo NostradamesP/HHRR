@@ -3,6 +3,7 @@ import { MessageSquare, Send } from "lucide-react";
 import { useAuth } from "./AuthContext";
 import { useBoard } from "./BoardContext";
 import { useServices } from "./presentation/context/ServicesContext";
+import { sanitizeText } from "./lib/utils";
 
 export default function ChatPanel() {
   const { user, userData } = useAuth();
@@ -33,7 +34,7 @@ export default function ChatPanel() {
 
   async function sendMessage(e) {
     e.preventDefault();
-    const cleanText = text.trim();
+    const cleanText = sanitizeText(text);
     if (!cleanText || !activeBoardId || !chatUser) return;
     try {
       const created = await messageService.addMessage(activeBoardId, {
@@ -84,6 +85,7 @@ export default function ChatPanel() {
           value={text}
           onChange={(e) => setText(e.target.value)}
           placeholder="Escribe un mensaje..."
+          maxLength={4000}
           className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-2 text-[11px] outline-none transition-colors focus:border-cyan-300 focus:bg-white"
         />
         <button

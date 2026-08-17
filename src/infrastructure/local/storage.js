@@ -14,7 +14,7 @@ export function writeLocalJSON(key, value) {
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (e) {
-    console.warn("localStorage write failed:", key, e);
+    if (import.meta.env.DEV) console.warn("localStorage write failed:", key, e);
   }
 }
 

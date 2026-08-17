@@ -12,6 +12,7 @@ import {
   serverTimestamp,
   arrayUnion,
   arrayRemove,
+  writeBatch,
 } from "firebase/firestore";
 import { BoardRepository } from "../../ports/BoardRepository";
 import { db } from "../../firebase";
@@ -22,11 +23,15 @@ async function deleteSubcollection(boardId, subcol) {
   try {
     const snap = await getDocs(collection(db, "boards", boardId, subcol));
     if (snap.empty) return;
-    await Promise.allSettled(
-      snap.docs.map((d) => deleteDoc(doc(db, "boards", boardId, subcol, d.id))),
-    );
+    const BATCH_SIZE = 500;
+    for (let i = 0; i < snap.docs.length; i += BATCH_SIZE) {
+      const batch = writeBatch(db);
+      const chunk = snap.docs.slice(i, i + BATCH_SIZE);
+      chunk.forEach((d) => batch.delete(doc(db, "boards", boardId, subcol, d.id)));
+      await batch.commit();
+    }
   } catch (e) {
-    console.warn(`Error cleaning ${subcol} for board ${boardId}:`, e);
+    if (import.meta.env.DEV) console.warn(`Error cleaning ${subcol} for board ${boardId}:`, e);
   }
 }
 

@@ -39,7 +39,7 @@ export function AuthProvider({ children }) {
             if (mounted) setUserData(data);
           }
         } catch (e) {
-          if (mounted) console.error("Error loading user data:", e);
+          if (mounted && import.meta.env.DEV) console.error("Error loading user data:", e);
         }
       } else {
         pendingUserUid = null;
